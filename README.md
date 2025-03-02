@@ -1,2 +1,1 @@
-# SCORE: 
-## Saturated Consensus Relocalization in Semantic Line Maps
+# SCORE:Saturated Consensus Relocalization in Semantic Line Maps
