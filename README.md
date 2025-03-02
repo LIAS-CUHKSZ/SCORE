@@ -3,7 +3,15 @@ This is the github repository for our IROS2025 paper(submitted).
 ## 1. Matlab Implementation for FGO-PnL solver and Examples
 
 ## 2. Cpp parallel Implementation for FGO-PnL solver and Examples
-
+Provide the implementation of algorithm in CPP. We will add parallel computing soon.
+You can use the following commands to compile and run.
+```shell
+cd ./cpp
+mkdir build
+cd build
+cmake ..
+./test
+```
 ## 3. Go through the relocalization pipeline on ScanNet++ Dataset
 ### Download ScanNet++ Dataset
 You can download scanNet++ dataset from the official website: [ScanNet++](https://kaldir.vc.in.tum.de/scannetpp/). Please note that the scannet++ data is very large, so make sure you have enough space to download it.
