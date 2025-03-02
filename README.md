@@ -4,8 +4,8 @@ This is the github repository for our IROS2025 paper(submitted).
 
 ## 2. Cpp parallel Implementation for FGO-PnL solver and Examples
 
-## 3. Go through the relocalization pipeline on ScanNet++ Datset
-### Download ScanNet++ Datset
+## 3. Go through the relocalization pipeline on ScanNet++ Dataset
+### Download ScanNet++ Dataset
 ### Use our revised python code to render pose, depth, and semantic labels
 ### Extract 3D Semantic Line Maps
 ### Semantic Segmentation Pipeline combing RAM++ and Grounded-SAM 
