@@ -1,0 +1,26 @@
+# release data downloaded to disk
+data_root: /data1/home/lucky/ELSED/dataset/data_selected
+
+scene_list: [55b2bf8036]
+filter_scenes: [55b2bf8036]
+
+# image type - iphone or dslr
+image_type: iphone
+
+no_log: true
+
+# subsample images 
+subsample_factor: 1
+# downsample images and rasterize
+image_downsample_factor: null
+
+rasterout_dir: /data1/home/lucky/ELSED/dataset/selected_raster_iphone
+
+limit_images: None
+
+wandb_group: null
+wandb_notes: null
+
+batch_size: 5
+limit_batches: null
+skip_existing: true
