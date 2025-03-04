@@ -1,5 +1,9 @@
 # SCORE:Saturated Consensus Relocalization in Semantic Line Maps
-This is the github repository for our IROS2025 paper(submitted).
+This is the github repository for our IROS2025 paper. 
+The paper is under review, we provide the arxiv version here:
+
+If you find our work helpful, please cite:
+
 ## 1. Matlab Implementation for FGO-PnL solver and Examples
 
 ## 2. Cpp parallel Implementation for FGO-PnL solver and Examples
@@ -47,5 +51,3 @@ NOTE: extract semantic labels will take a long time.
 ### Extract 3D Semantic Line Maps
 ### Semantic Segmentation Pipeline combing RAM++ and Grounded-SAM 
 
-## 4. Techinical Report for Interval Analysis
-Uploaded on Arxiv:
