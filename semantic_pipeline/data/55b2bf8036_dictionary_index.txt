@@ -1,0 +1,24 @@
+5 packet
+8 wall
+12 heater
+13 ceiling
+16 ceiling lamp
+18 floor
+19 office table
+20 window
+22 jacket
+24 rack
+26 keyboard
+27 cabinet
+28 office chair
+29 paper organizer
+30 monitor
+32 painting
+33 whiteboard
+34 telephone
+36 trash can
+37 storage box
+39 wheelchair
+42 monitor stand
+44 briefcase
+45 window sill

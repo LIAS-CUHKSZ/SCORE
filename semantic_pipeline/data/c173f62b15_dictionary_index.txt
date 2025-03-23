@@ -1,0 +1,38 @@
+1 floor
+2 wall
+3 cabinet
+4 door
+5 bench
+6 chair
+8 sofa
+9 table
+11 whiteboard
+13 poster
+14 exhaust fan
+15 calendar
+16 heater
+18 frame
+19 ladder
+20 projector screen
+21 coat rack
+23 structure
+24 shelf
+25 crate
+27 box
+29 computer tower
+30 monitor
+33 stool
+34 cone
+35 trash can
+38 light switch
+39 socket
+41 pedestal fan
+42 pillow
+45 ceiling
+46 speaker
+47 projector
+49 ceiling light
+51 mat
+52 sofa chair
+10 doorframe
+12 paper

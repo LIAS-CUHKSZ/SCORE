@@ -1,0 +1,24 @@
+packet
+wall
+heater
+ceiling
+ceiling lamp
+floor
+office table
+window
+jacket
+rack
+keyboard
+cabinet
+office chair
+paper organizer
+monitor
+painting
+whiteboard
+telephone
+trash can
+storage box
+wheelchair
+monitor stand
+briefcase
+window sill
