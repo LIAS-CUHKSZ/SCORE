@@ -49,6 +49,8 @@ python -m semantic.prep.semantics_2d
 NOTE: extract semantic labels will take a long time.
 
 ### Extract 3D Semantic Line Maps
+We provide the code `3d_line_semantic` to extract the 3D semantic line maps from the ScanNet++ dataset. 
+
 ### Semantic Segmentation Pipeline combing RAM++ and Grounded-SAM
 We provide the code `semantic_pipeline/` to get the semantic segmentation results using the RAM++ and Grounded-SAM.
 
