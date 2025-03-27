@@ -1,9 +1,15 @@
+The code is still under construction, the full-package will be released before June, stay tuned！
 # SCORE:Saturated Consensus Relocalization in Semantic Line Maps
 This is the github repository for our IROS2025 paper. 
 The paper is under review, we provide the arxiv version here:
-
+https://arxiv.org/pdf/2503.03254
 If you find our work helpful, please cite:
-
+@article{jiang2025score,
+  title={SCORE: Saturated Consensus Relocalization in Semantic Line Maps},
+  author={Jiang, Haodong and Zheng, Xiang and Zhang, Yanglin and Zeng, Qingcheng and Li, Yiqian and Hong, Ziyang and Wu, Junfeng},
+  journal={arXiv preprint arXiv:2503.03254},
+  year={2025}
+}
 ## 1. Matlab Implementation for FGO-PnL solver and Examples
 
 ## 2. Cpp parallel Implementation for FGO-PnL solver and Examples
