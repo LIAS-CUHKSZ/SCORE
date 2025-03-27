@@ -16,7 +16,7 @@ int main(){
     double translation_epsilon=0.05;
     double translation_resolution=0.015;
     string satured_kernel="p-8";
-    ACM_BnB* solver = new ACM_BnB(max_iter,rotation_epsilon,branch_resolution,sample_resolution,translation_epsilon,translation_resolution,satured_kernel);
+    FGO_PnL* solver = new FGO_PnL(max_iter,rotation_epsilon,branch_resolution,sample_resolution,translation_epsilon,translation_resolution,satured_kernel);
 
     std::ifstream file("../../test_data/test_data_cpp.csv");
     if(!file.is_open()){

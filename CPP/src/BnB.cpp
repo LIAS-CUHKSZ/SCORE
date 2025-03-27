@@ -11,12 +11,12 @@
 using namespace std;
 using namespace Eigen;
 
-ACM_BnB::~ACM_BnB() {
+FGO_PnL::~FGO_PnL() {
     // Destructor implementation and Clean up resources if any
-    cout << "BnB object is being deleted" << endl;
+    cout << "FGO_PnL object is being deleted" << endl;
 };
 // data input
-void ACM_BnB::data_load(vector<Vector3d> &line_2ds,vector<Vector3d> &line_3ds,vector<Vector3d> &points_3d,vector<int> &line_tags){
+void FGO_PnL::data_load(vector<Vector3d> &line_2ds,vector<Vector3d> &line_3ds,vector<Vector3d> &points_3d,vector<int> &line_tags){
     int N = line_2ds.size();
     this->init_line_pairs.resize(N);
     for(auto i =0;i<N;i++){
@@ -30,7 +30,7 @@ void ACM_BnB::data_load(vector<Vector3d> &line_2ds,vector<Vector3d> &line_3ds,ve
     return;
 };
 // data process
-void ACM_BnB::preprocess(line_pair& lp){
+void FGO_PnL::preprocess(line_pair& lp){
     Vector3d& vector_n = lp.line_2d;
     Vector3d& vector_v = lp.line_3d;
     lp.attribute->inner_product = vector_n.dot(vector_v);
@@ -54,7 +54,7 @@ void ACM_BnB::preprocess(line_pair& lp){
     angle_bisectors(lp);
     return;
 };
-void ACM_BnB::rot_bnb_estimate(){
+void FGO_PnL::rot_bnb_estimate(){
     range alpha(0, M_PI);
     range phi_1(0, M_PI);
     range phi_2(M_PI, 2*M_PI);
@@ -106,7 +106,7 @@ void ACM_BnB::rot_bnb_estimate(){
     } ;
     return;
 };
-void ACM_BnB::rot_bnb_epoch(Square &branch){
+void FGO_PnL::rot_bnb_epoch(Square &branch){
     auto [h1_upper, h1_lower] = h1_bounds(branch);
     auto [h2_upper, h2_lower] = h2_bounds(branch);
     auto lower_params = generate_params(h1_lower, h2_lower);
@@ -154,7 +154,7 @@ void ACM_BnB::rot_bnb_epoch(Square &branch){
     return;
 };
 
-pair<VectorXd,VectorXd> ACM_BnB::h1_bounds(Square &branch){
+pair<VectorXd,VectorXd> FGO_PnL::h1_bounds(Square &branch){
     int N = init_line_pairs.size(); // 假设line_pair是类成员变量
     VectorXd upper = VectorXd::Zero(N);
     VectorXd lower = VectorXd::Zero(N);
@@ -307,7 +307,7 @@ pair<VectorXd,VectorXd> ACM_BnB::h1_bounds(Square &branch){
 
     return {upper, lower};
 };
-pair<VectorXd,VectorXd> ACM_BnB::h2_bounds(Square &branch){
+pair<VectorXd,VectorXd> FGO_PnL::h2_bounds(Square &branch){
     int N = this->init_line_pairs.size();
     VectorXd upper = VectorXd::Zero(N);
     VectorXd lower = VectorXd::Zero(N);
@@ -430,7 +430,7 @@ pair<VectorXd,VectorXd> ACM_BnB::h2_bounds(Square &branch){
     }
     return {upper, lower};
 };
-vector<double> ACM_BnB::upper_interval(RowVector3d coef_1,RowVector3d coef_2){
+vector<double> FGO_PnL::upper_interval(RowVector3d coef_1,RowVector3d coef_2){
     double A_1 = coef_1[0];
     double phi_1 = coef_1[1];
     double const_1 = coef_1[2];
@@ -525,7 +525,7 @@ vector<double> ACM_BnB::upper_interval(RowVector3d coef_1,RowVector3d coef_2){
     return interval;
 
 };
-vector<double> ACM_BnB::lower_interval(RowVector3d coef){
+vector<double> FGO_PnL::lower_interval(RowVector3d coef){
     double A = coef[0];
     double phi = coef[1];
     double const_ = coef[2];
@@ -676,7 +676,7 @@ vector<double> ACM_BnB::lower_interval(RowVector3d coef){
     }
     return interval;
 };
-pair<double,double> ACM_BnB::satured_interval_stabbing(vector<double> &interval,vector<int> line_tags){
+pair<double,double> FGO_PnL::satured_interval_stabbing(vector<double> &interval,vector<int> line_tags){
     if (line_tags.empty()||interval.empty()) {
         return {0.0, 0.0};
     }
@@ -725,7 +725,7 @@ pair<double,double> ACM_BnB::satured_interval_stabbing(vector<double> &interval,
     return {weighted_num_stabbed, stabber};
 };
 // Transition function
-void ACM_BnB::angle_bisectors(line_pair &lp){
+void FGO_PnL::angle_bisectors(line_pair &lp){
     const Eigen::Vector3d& v1 = lp.line_2d;
     const Eigen::Vector3d& v2 = lp.line_3d;
 
@@ -771,7 +771,7 @@ void ACM_BnB::angle_bisectors(line_pair &lp){
     }
     return ;
 };
-MatrixXd ACM_BnB::generate_params(VectorXd &lower,VectorXd &upper){
+MatrixXd FGO_PnL::generate_params(VectorXd &lower,VectorXd &upper){
     int N = this->init_line_pairs.size();
     VectorXd inner_product = VectorXd::Zero(N);
     MatrixXd params = MatrixXd::Zero(N, 3);

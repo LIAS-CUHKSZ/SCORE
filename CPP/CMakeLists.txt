@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(acm_BnB)
+project(FGO_demo)
 
 ## Compile as C++14, supported in ROS Kinetic and newer
 add_compile_options(-std=c++17)
@@ -16,9 +16,9 @@ include_directories(
 )
 add_library(BnB_module SHARED src/BnB.cpp )
 add_library(helper  SHARED src/helper.cpp)
-add_executable(acm_BnB acm_bnb.cpp src/BnB.cpp)
+add_executable(FGO_demo FGO_demo.cpp src/BnB.cpp)
 target_link_libraries(BnB_module helper)
-target_link_libraries(acm_BnB BnB_module)
+target_link_libraries(FGO_demo BnB_module)
 
 
 

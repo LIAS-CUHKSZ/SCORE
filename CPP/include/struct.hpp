@@ -4,6 +4,7 @@
 #include <math.h>
 using namespace Eigen;
 using namespace std;
+
 struct help_attribute{
     bool east_or_not;
     double norm_of_outer_product;
@@ -24,10 +25,15 @@ struct help_attribute{
     Vector2d angle_west_othogonal_angle_bisector;
 };
 struct line_pair{
+    // 2d line
     Vector3d line_2d=Vector3d::Zero();
+    // 3d line
     Vector3d line_3d=Vector3d::Zero();
+    // 3d point
     Vector3d point_3d=Vector3d::Zero();
+    // whether the line is inliner
     bool inliner=true;
+    // semactic tag
     int line_tag;
     // residual of translation
     double t_res(Matrix3d R,Vector3d t){
@@ -43,6 +49,7 @@ struct line_pair{
     help_attribute* attribute=new help_attribute();
 };
 struct range{
+    // interval left and right
     range(double small, double big) 
     {   
         if(small>big){
@@ -55,14 +62,13 @@ struct range{
         };
         width = upper - lower;
         center = (lower + upper) / 2;
-        
-
     };
     double width;
     double lower;
     double upper;
     double center;
 };
+// cube of alpha and phi
 struct Square{
     range alpha;
     range phi;
@@ -77,6 +83,7 @@ struct Square{
             center[1]=phi.center;
             
         };  
+    // formulate the comparison operator
     bool operator<(const Square & other) const{
         return upper_bound < other.upper_bound;
     };
