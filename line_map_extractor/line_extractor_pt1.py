@@ -13,76 +13,60 @@ from sklearn.cluster import KMeans
 from joblib import Parallel, delayed
 from scipy import stats
 # parameters
-
 params_2d = {
     # for parallel computing
-    "thread_number": 16,                                 
+    "thread_number": 4,                                 
     # for 2d line extractor
     "sigma": 1,
     "gradientThreshold": 20,
-    "minLineLen": 150,                       # tune this            
+    "minLineLen": 150,                       # tune this to filer short 2D lines            
     "lineFitErrThreshold": 0.2,
     "pxToSegmentDistTh": 1.5,
     "validationTh": 0.15,
     "validate": True,
     "treatJunctions": True,
     # for 2d line merging
-    "pix_dis_thresh": 10,                    # tune this         
+    "pix_dis_thresh": 10,                    # tune this to filter nearby 2D lines
     "parallel_thres_2d": np.cos(3*np.pi/180), 
     # for 3d line regression
-    "background_depth_diff_thresh": 0.3,     # tune this
-    "line_points_num_thresh": 30,          # tune this 
-    "perturb_length": 16,                    # tune this
-     "num_hypo":8,                          # tune this
+    "background_depth_diff_thresh": 0.3,     # tune this to threshold the depth leap between fore- and back-ground points 
+    "line_points_num_thresh": 30,            # tune this to threshold the minimal number required to regress a reliable 3D line
+    "perturb_length": 16,                    # tune this to adjust the perturbation 
+     "num_hypo":8,                           # tune this to adjust the hypothesis number
 }
-# scene_id = "55b2bf8036"
-# scene_id = "689fec23d7"
-scene_id = "69e5939669"
-# scene_id = "c173f62b15"
-init_data_folder = f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/iphone/rgb_used_clear/"
-mesh_file = (
-    f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/scans/mesh_aligned_0.05.ply"
-)
-render_image = f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/iphone/render_depth"
-render_depth_list = sorted(glob.glob(render_image + "/*.png"))
-# downsample the list to half the size
-# render_depth_list = render_depth_list[::2]
-origin_img_list = sorted(glob.glob(init_data_folder + "*.jpg"))
+home = os.path.expanduser("~")
+scene_id = "c173f62b15"
+rgb_folder = home+f"/SCORE/dataset/{scene_id}/rgb/"
+mesh_file =  home+f"/SCORE/dataset/{scene_id}/scans/mesh_aligned_0.05.ply"
+depth_image_folder = home+f"/SCORE/dataset/{scene_id}/render_depth/"
+depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
+rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
+# remove the depth images that do not have corresponding rgb images
 k = 0
-while(k<len(render_depth_list)):
-    render_depth_file = render_depth_list[k]
-    rgb_file = render_depth_file.replace("render_depth", "rgb_used_clear").replace("png", "jpg")
-    if rgb_file not in origin_img_list:
-        render_depth_list.remove(render_depth_file)
+while(k<len(depth_img_list)):
+    depth_img_name = depth_img_list[k]
+    rgb_file = depth_img_name.replace("render_depth", "rgb").replace("png", "jpg")
+    if rgb_file not in rgb_img_list:
+        depth_img_list.remove(depth_img_name)
     else:
         k=k+1
-# load pose, camera to world
-pose_file = (
-    f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/iphone/pose_intrinsic_imu.json"
-)
-anno_file = f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/scans/segments_anno.json"
-segments_file = f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/scans/segments.json"
-instance_path = f"/data1/home/lucky/ELSED/dataset/selected_semantic_2d_iphone/obj_ids/{scene_id}/"
-label_filter_file = f"/data1/home/lucky/ELSED/dataset/data_selected/{scene_id}/label_remapping.txt"
+pose_file = home+f"/SCORE/dataset/{scene_id}/pose_intrinsic_imu.json" # camera pose to world
+anno_file = home+f"/SCORE/dataset/{scene_id}/scans/segments_anno.json"
+segments_file = home+f"/SCORE/dataset/{scene_id}/scans/segments.json"
+instance_path = home+f"/SCORE/dataset/{scene_id}/obj_ids/"
+label_filter_file = home+f"/SCORE/dataset/{scene_id}/label_remapping.txt"
 ### result saving path
-line_image_folder = (
-    f"/data1/home/lucky/ELSED/dataset/data_jhd/{scene_id}/iphone/rgb_line_image/"
-)
-if not os.path.exists(line_image_folder):
-    os.makedirs(line_image_folder)
-# unmerged 3d lines
-line_mesh_raw_folder = (
-    f"/data1/home/lucky/ELSED/dataset/data_jhd/{scene_id}/iphone/line_mesh_raw/"
-)
-if not os.path.exists(line_mesh_raw_folder):
-    os.makedirs(line_mesh_raw_folder)
-with open(pose_file, "r") as f:
+line_image_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2d lines and labels
+line_mesh_raw_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3d lines
+for out_path in [line_image_folder, line_mesh_raw_folder]:
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+### load data
+with open(pose_file, "r") as f:  # load pose
     pose_data = json.load(f)
-# load semantics for each object
-with open(anno_file, "r") as f:
+with open(anno_file, "r") as f:  # load semantics for each object
     anno = json.load(f)
-# load mesh
-mesh = o3d.io.read_triangle_mesh(mesh_file)
+mesh = o3d.io.read_triangle_mesh(mesh_file) # load mesh
 obj_label = {}
 for obj in anno['segGroups']:
     obj_label[obj['id']] = obj['label']
@@ -101,15 +85,11 @@ for obj, label in obj_label.items():
     obj_id_label_id[obj] = labels[label]
 obj_id_label_id[0] = 0
 label_2_semantic_dict = {v:k for k,v in labels.items()}
-# for v,k in label_2_semantic_dict.items():
-        # print(v,k)
 # filter the unwanted labels
 label_filter_file = open(label_filter_file, "r")
 label_filtering = np.array(range(len(label_2_semantic_dict)))+1
 for line in label_filter_file:
-    line = line.strip()
-    # get the two number seperated by comma:
-    line = line.split(",")
+    line = line.strip().split(",")
     label_1 = int(line[0])
     label_2 = int(line[1])
     label_filtering[label_1-1] = label_2
@@ -141,13 +121,15 @@ scene_line_3d_semantic_labels = []
 scene_line_3d_params = []
 scene_line_3d_end_points = []
 scene_line_3d_image_source = []
+
 def get_line_eq(x0, y0, x1, y1):
+    # derive 2d line paramaters from two endpoints
     m = (y1 - y0) / (x1 - x0)
     c = y0 - m * x0
     return m, c
 
 def extract_and_prune_2dlines(rgb):
-    # get 2d lines
+    # extract 2d lines using ELSED
     segments, scores = pyelsed.detect(
         rgb,
         sigma=params_2d["sigma"],
@@ -164,7 +146,7 @@ def extract_and_prune_2dlines(rgb):
         x1, y1, x2, y2 = segment
         if x2 < x1:
             segments[j] = x2, y2, x1, y1
-    # prune 2d lines
+    # prune redundant 2d lines
     sorted_index = np.argsort(scores)[::-1]
     segments = segments[sorted_index]
     scores = scores[sorted_index]
@@ -209,19 +191,23 @@ def get_foreground_points(valid_z):
     centers = kmeans.cluster_centers_
     depth_mean = np.mean(valid_z) 
     background_flag=False
-    if len(np.unique(kmeans.labels_))==1: # there is only one depth cluster
+    if len(np.unique(kmeans.labels_))==1:
+        # there is only one depth cluster 
         return foreground_idx,depth_mean,background_flag   
     if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2d["background_depth_diff_thresh"]:
+        # there is a depth leap between two clusters
         depth_mean=centers[1][0]
         foreground_idx = np.where(kmeans.labels_ == 1)[0]
         background_flag=True
     if  centers[1]>centers[0] and min(depth_cluster_1)-max(depth_cluster_0) > params_2d["background_depth_diff_thresh"]:
+        # there is a depth leap between two clusters
         depth_mean=centers[0][0]
         foreground_idx = np.where(kmeans.labels_ == 0)[0]
         background_flag=True
     return foreground_idx,depth_mean,background_flag
 
 def perturb_and_extract(x,y,render_depth,v,num_hypo):
+    # perturb the 2D line and extract different 3D points
     move_length_list = np.linspace(-1,1,num_hypo)*params_2d["perturb_length"]
     background_flag = []
     depth_mean = []
@@ -257,6 +243,7 @@ def perturb_and_extract(x,y,render_depth,v,num_hypo):
     return depth_mean,xyz_list,foreground_idices,background_flag
 
 def calculate_error(n_j_pixel,v,intrinsic_matrix,pose_matrix,p):
+    # calculate the geometric error using pose data
     n_j_camera = n_j_pixel @ intrinsic_matrix
     n_j_camera = n_j_camera / np.linalg.norm(n_j_camera)
     n_j_camera = n_j_camera.reshape(3,1)
@@ -264,8 +251,8 @@ def calculate_error(n_j_pixel,v,intrinsic_matrix,pose_matrix,p):
     error_trans = (p.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
     return error_rot, error_trans
 
-def process_file(i, render_depth_file):
-    basename = os.path.basename(render_depth_file).split(".")[0]
+def process_file(i, depth_img_name):
+    basename = os.path.basename(depth_img_name).split(".")[0]
     intrinsic = pose_data[basename]["intrinsic"]
     pose_matrix = np.array(pose_data[basename]["aligned_pose"])
     ###
@@ -284,11 +271,11 @@ def process_file(i, render_depth_file):
     proj_error_t = []
     # millimeter to meter
     render_depth = (
-        cv2.imread(render_depth_file, cv2.IMREAD_UNCHANGED).astype(np.float32) / 1000
+        cv2.imread(depth_img_name, cv2.IMREAD_UNCHANGED).astype(np.float32) / 1000
     )
     # read rgb
-    rgb_file = render_depth_file.replace("render_depth", "rgb").replace("png", "jpg")
-    obj_id_file = os.path.join(instance_path, str(os.path.basename(render_depth_file)).replace(".png", ".jpg.npy"))
+    rgb_file = depth_img_name.replace("render_depth", "rgb").replace("png", "jpg")
+    obj_id_file = os.path.join(instance_path, str(os.path.basename(depth_img_name)).replace(".png", ".jpg.npy"))
     obj_ids = np.load(obj_id_file)
     rgb = cv2.imread(rgb_file, cv2.IMREAD_GRAYSCALE)
     rgb_color = cv2.imread(rgb_file)
@@ -364,6 +351,7 @@ def process_file(i, render_depth_file):
             continue  
         else:
             line_2d_points.append([x,y])
+            # draw the 2D lines along with their semantic labels
             cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(rgb_color, str(line_2d_count), (int((x1 + x2) / 2), int((y1 + y2) / 2)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
             cv2.putText(rgb_color, label_2_semantic_dict[semantic_label], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
@@ -386,7 +374,7 @@ def process_file(i, render_depth_file):
             )
         except:
             print("extrct 3d line fails")
-            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2)
+            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
             error_rot   = -1
             error_trans = -1
             continue
@@ -394,7 +382,7 @@ def process_file(i, render_depth_file):
         ### if the number of inliers is less than a threshold, we discard this 3d line
         if len(inlier_index) < params_2d["line_points_num_thresh"]:
             print("extrct 3d line fails")
-            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2)
+            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
             error_rot   = -1
             error_trans = -1
             continue
@@ -420,12 +408,13 @@ def process_file(i, render_depth_file):
     cv2.imwrite(os.path.join(line_image_folder, f"{basename}.jpg"), rgb_color)    
     return (basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t)
 results=[]
-# for i, render_depth_file in enumerate(render_depth_list):
+## unparalled version:
+# for i, depth_img_name in enumerate(depth_img_list):
 #     if i > -1:
-#         result = process_file(i,render_depth_file)
+#         result = process_file(i,depth_img_name)
 #         results.append(result)
 # Use parallel processing to process files
-results = Parallel(n_jobs=params_2d["thread_number"])(delayed(process_file)(i, render_depth_file) for i, render_depth_file in enumerate(render_depth_list))
+results = Parallel(n_jobs=params_2d["thread_number"])(delayed(process_file)(i, depth_img_name) for i, depth_img_name in enumerate(depth_img_list))
 for result in results:
     basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t = result
     ###
@@ -447,13 +436,13 @@ for result in results:
     scene_proj_error_r_raw[basename]=proj_error_r
     scene_proj_error_t_raw[basename]=proj_error_t
 
-for i in range(0,len(render_depth_list)):
-    basename = os.path.basename(render_depth_list[i]).split(".")[0]
+for i in range(0,len(depth_img_list)):
+    basename = os.path.basename(depth_img_list[i]).split(".")[0]
     intrinsic = pose_data[basename]["intrinsic"]
     scene_pose[basename] = pose_data[basename]["aligned_pose"]
     scene_intrinsic[basename] = intrinsic
 
-np.save(f"/data1/home/lucky/ELSED/code_iphone/result/{scene_id}_results_raw.npy", {
+np.save(home+f"/SCORE/line_map_extractor/out/{scene_id}/results_raw.npy", {
     "scene_pose": scene_pose,
     "scene_intrinsic": scene_intrinsic,
     "obj_id_label_id": obj_id_label_id,
