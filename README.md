@@ -55,8 +55,19 @@ python -m semantic.prep.semantics_2d
 NOTE: extract semantic labels will take a long time.
 
 ### Extract 3D Semantic Line Maps
-We provide the code `3d_line_semantic` to extract the 3D semantic line maps from the ScanNet++ dataset. 
-
+We provide the code `line_map_extractor` to extract the 3D semantic line maps from the ScanNet++ dataset. 
+As detailed in our paper, we extract 3D lines based on a posed image sequence with depth and semnatic masks. 
+The procedure goes: 
+(1) Extract 2D lines in the images, and assign a semantic label for each line according to the semantic mask.
+(2) Regress the corresponding 3D line based on pose and depth, assign the 3D line with the same label as the 2D line.
+(3) After processing all images, cluster the regressed 3D lines to reduce redundancy and gather multiple labels for a single 3D line.   
+The readers will find the code comments in consistency with the description in our paper.
+#### Install the dependencies
+We use elsed as 2D line extractor, and use joblib to parallelize the extration proccess.
+```bash
+cd  line_map_extracto
+pip install -r requirements.txt
+```
 ### Semantic Segmentation Pipeline combing RAM++ and Grounded-SAM
 We provide the code `semantic_pipeline/` to get the semantic segmentation results using the RAM++ and Grounded-SAM.
 

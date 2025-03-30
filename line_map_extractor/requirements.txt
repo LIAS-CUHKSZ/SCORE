@@ -1,0 +1,3 @@
+joblib
+setuptools
+git+https://github.com/iago-suarez/ELSED.git
