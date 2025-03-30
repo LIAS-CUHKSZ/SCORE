@@ -1,4 +1,4 @@
-The code is still under construction, the full-package will be released before June, stay tuned！
+The code is still under construction, the full-package will be released in April, stay tuned！
 # SCORE:Saturated Consensus Relocalization in Semantic Line Maps
 This is the github repository for our IROS2025 paper. 
 The paper is under review, we provide the arxiv version here:
