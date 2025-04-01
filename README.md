@@ -61,7 +61,15 @@ The procedure goes:
 1.  Extract 2D lines in the images, and assign a semantic label for each line according to the semantic mask.
 2.  Regress the corresponding 3D line based on pose and depth, assign the 3D line with the same label as the 2D line.
 3.  After processing all images, cluster the regressed 3D lines to reduce redundancy and gather multiple labels for a single 3D line.   
+
 The readers will find the code comments in consistency with the description in our paper.
+According to ScanNet++ term of use, we can not share the original data.
+In order to facilicate a fast replication of our work, we share 
+1. the adopted dictionary for each scene
+2. the output 3d line mesh after running line_extractor_pt1.py
+3. the output numpy file after running line_extractor_pt1.py
+
+You can tune the dictionary by editing the output numpy file, and also use the numpy file to run line_extractor_pt2.py.
 #### Install the dependencies
 We use elsed as 2D line extractor, and use joblib to parallelize the extration proccess.
 ```bash
@@ -71,6 +79,7 @@ pip install -r line_map_extractor/requirements.txt
 ``` bash
 python line_map_extractor/line_extractor_pt1.py
 ```
+
 #### Procedure 3 by running
 ``` bash
 python line_map_extractor/line_extractor_pt2.py
