@@ -10,7 +10,7 @@ License: MIT
 import pyelsed
 import numpy as np
 from sklearn.cluster import KMeans
-# parameters
+# parameters for line_extractor_pt1
 params_2d = {
     # for parallel computing
     "thread_number": 4,                                 
@@ -31,6 +31,17 @@ params_2d = {
     "line_points_num_thresh": 30,            # tune this to threshold the minimal number required to regress a reliable 3D line
     "perturb_length": 16,                    # tune this to adjust the perturbation 
      "num_hypo":8                            # tune this to adjust the hypothesis number
+}
+
+# parameters for line_extractor_pt2
+params_3d = {
+    # for parallel computing
+    "thread_number": 32,                                 
+    # for 3d line merging
+    "parrallel_thresh_3d":np.cos(2.5*np.pi/180), # tune this
+    "overlap_thresh_3d": 0.025,                  # tune this
+    # for 3d line pruning
+    "degree_threshold": 2,                       # tune this
 }
 
 def get_line_eq(x0, y0, x1, y1):

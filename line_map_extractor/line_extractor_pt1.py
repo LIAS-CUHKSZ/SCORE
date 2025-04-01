@@ -1,9 +1,9 @@
 """
 line_extractor_pt1.py 
 
-This script is responsible for extracting 2D lines from images,
-and regressing 3D lines from the 2D lines based on pose and depth information.
+This script extracts 2D lines from images and regresses 3D lines from the 2D lines based on pose and depth.
 We assign each pair of 2D and 3D line with the same semantic label. 
+You can tune the paramters defined in helper.py, and edit the label_remapping.txt file.
 
 Output:
 - Rgb images annotated with extracted lines thier semantic labels. 
@@ -29,7 +29,8 @@ from scipy import stats
 
 ################################### Loading and Configuring ###################################
 home = os.path.expanduser("~")
-scene_id = "c173f62b15"
+scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
+scene_id = scene_list[2]
 rgb_folder = home+f"/SCORE/dataset/{scene_id}/rgb/"
 depth_image_folder = home+f"/SCORE/dataset/{scene_id}/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
@@ -51,6 +52,7 @@ instance_path = home+f"/SCORE/dataset/{scene_id}/obj_ids/"
 dictionary_folder = home+f"/SCORE/dictionary/{scene_id}/"
 line_image_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2d lines and labels
 line_mesh_raw_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3d lines
+line_data_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/" # numpy file with all the extracted 2d lines and regressed 3d lines
 for out_path in [line_image_folder, line_mesh_raw_folder,dictionary_folder]:
     if not os.path.exists(out_path):
         os.makedirs(out_path)
@@ -315,7 +317,7 @@ for i in range(0,len(depth_img_list)):
     scene_pose[basename] = pose_data[basename]["aligned_pose"]
     scene_intrinsic[basename] = intrinsic
 ### save the results
-np.save(home+f"/SCORE/line_map_extractor/out/{scene_id}/results_raw.npy", {
+np.save(line_data_folder+f"results_raw.npy", {
     "scene_pose": scene_pose,
     "scene_intrinsic": scene_intrinsic,
     "obj_id_label_id": obj_id_label_id,
