@@ -8,5 +8,8 @@ mesh_aligned_0.05point_cloud.txt
 **/scannetpp_init/
 **/scannetpp_modify/
 **/initdata/
-**/scannet_data/
+**/scannet_data/*
 **/archive/
+line_map_extractor/out/**/*.jpg
+line_map_extractor/out/**/*.ply
+line_map_extractor/out/**/*.npy

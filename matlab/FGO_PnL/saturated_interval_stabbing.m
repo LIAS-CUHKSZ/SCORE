@@ -1,4 +1,15 @@
-function [weighted_num_stabbed,stabber] = saturated_interval_stabbing(Intervals,ids,kernel)
+"""
+Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
+        Xiang Zheng   <224045013@link.cuhk.edu.cn>
+Version: 1.0
+License: MIT
+"""
+function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals,ids,kernel)
+    % Intervals: 2Lx1, specify the endpoints for L intervals in sequence
+    % ids: Lx1, the group id for each interval
+    % kernel: function, the adopted saturation function
+
+    % only need to compute the value once
     persistent kernel_buff;
     if isempty(kernel_buff)
         kernel_buff=zeros(100,1);
@@ -13,7 +24,7 @@ function [weighted_num_stabbed,stabber] = saturated_interval_stabbing(Intervals,
     length_sidx = 2*L;
     sat_count = 0;
     % best_1_count = 0;
-    weighted_num_stabbed = 0; 
+    saturated_num_stabbed = 0; 
     stabber = 0;
     count_buffer=zeros(max(ids),1);
     for i = 1:length_sidx
@@ -21,8 +32,8 @@ function [weighted_num_stabbed,stabber] = saturated_interval_stabbing(Intervals,
             temp = ids((sidx(i)+1)/2);
             count_buffer(temp)=count_buffer(temp)+1;
             sat_count = sat_count + kernel_buff(min(count_buffer(temp),100));
-            if sat_count > weighted_num_stabbed                   
-               weighted_num_stabbed = sat_count;
+            if sat_count > saturated_num_stabbed                   
+               saturated_num_stabbed = sat_count;
                % best_1_count = sum(count_buffer>0);
                stabber = Intervals(sidx(i))+1e-12;  
             end            
