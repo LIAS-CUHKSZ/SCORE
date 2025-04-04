@@ -1,18 +1,28 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(FGO_demo)
 
+# add macro USE_OMP
+add_definitions(-DUSE_OMP)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 ## Compile as C++17
 add_compile_options(-std=c++17)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -ffast-math -funroll-loops -fopenmp")
 
 # Add OpenMP support
 find_package(OpenMP REQUIRED)
 if (OPENMP_FOUND)
     message(STATUS "OpenMP found")
 endif()
-
 find_package(OpenCV)
 find_package(Eigen3 REQUIRED)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# improve large matrix performance
+add_definitions(-DEIGEN_DONT_PARALLELIZE)  # Let OpenMP handle parallelization
+add_definitions(-DEIGEN_USE_BLAS)          # Use BLAS if available
+add_definitions(-DEIGEN_USE_LAPACKE)       # Use LAPACK if available
+add_definitions(-DEIGEN_VECTORIZE)         # Enable vectorization
 
 include_directories(
     ${OpenCV_INCLUDE_DIRS}
@@ -20,8 +30,6 @@ include_directories(
     include
 )
 
-# add macro USE_OMP
-add_definitions(-DUSE_OMP)
 
 add_library(BnB_module SHARED src/BnB.cpp)
 add_library(helper SHARED src/helper.cpp)
