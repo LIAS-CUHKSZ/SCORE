@@ -20,7 +20,9 @@ void FGO_PnL::data_load(vector<Vector3d> &line_2ds, vector<Vector3d> &line_3ds,
                         vector<Vector3d> &points_3d, vector<int> &line_tags) {
   int N = line_2ds.size();
   this->init_line_pairs.resize(N);
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(4)
+#endif
   for (auto i = 0; i < N; i++) {
     this->init_line_pairs[i].line_2d = line_2ds[i];
     this->init_line_pairs[i].line_3d = line_3ds[i];
@@ -127,7 +129,9 @@ void FGO_PnL::rot_bnb_epoch(Square &branch) {
   VectorXd h2_center = VectorXd::Zero(N);
   VectorXd u_center =
       polar_2_xyz(Vector2d(branch.alpha.center, branch.phi.center));
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(4)
+#endif
   for (auto i = 0; i < N; i++) {
     h1_center[i] = u_center.dot(init_line_pairs[i].attribute->outer_product);
     h2_center[i] = u_center.dot(init_line_pairs[i].line_3d) *
@@ -139,14 +143,18 @@ void FGO_PnL::rot_bnb_epoch(Square &branch) {
   vector<double> lower_intervals;
   vector<int> line_tags_upper;
   vector<int> line_tags_lower;
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(8)
+#endif
   for (int i = 0; i < N; ++i) {
     // Upper intervals
     vector<double> tmp_interval;
     vector<double> tmp_interval2;
     tmp_interval = upper_interval(upper_params.row(i), lower_params.row(i));
     tmp_interval2 = lower_interval(center_params.row(i));
+#ifdef USE_OMP
 #pragma omp critical
+#endif
     {
       upper_intervals.insert(upper_intervals.end(), tmp_interval.begin(),
                              tmp_interval.end());
@@ -187,7 +195,9 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
   const range &range_phi = branch.phi;
 
   if (cube_width <= sample_resolution) {
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(8)
+#endif
     for (int i = 0; i < N; ++i) {
       Vector2d outer_angle;
       Vector3d outer_product;
@@ -233,7 +243,9 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
       }
     }
   } else {
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(8)
+#endif
     for (int i = 0; i < N; ++i) {
       Vector2d outer_angle;
       Vector3d outer_product;
@@ -403,8 +415,10 @@ pair<VectorXd, VectorXd> FGO_PnL::h2_bounds(Square &branch) {
       vertex_cache.col(3 * temp + i - 1) = polar_2_xyz(a_start, phi[i]);
   }
 
-  // Process each line pair
+// Process each line pair
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(12)
+#endif
   for (int i = 0; i < N; ++i) {
     double maximum, minimum;
     Vector2d normal_angle, o_normal_angle;
@@ -846,7 +860,9 @@ MatrixXd FGO_PnL::generate_params(VectorXd &lower, VectorXd &upper) {
   VectorXd inner_product = VectorXd::Zero(N);
   MatrixXd params = MatrixXd::Zero(N, 3);
 
+#ifdef USE_OMP
 #pragma omp parallel for schedule(static) num_threads(4)
+#endif
   for (int i = 0; i < N; i++) {
     inner_product(i) = this->init_line_pairs[i].attribute->inner_product;
   }
