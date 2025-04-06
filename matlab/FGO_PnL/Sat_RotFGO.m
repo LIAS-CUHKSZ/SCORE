@@ -1,5 +1,6 @@
 %%%%
 % Implementation of the FGO rotation estimator under saturated consensus maximization
+
 %%% Inputs:
 % vector_v: N x 3, the direction vector for each matched 3D map line.
 % vector_n: N x 3, the normal vector paramater for each 2D image line.
@@ -9,6 +10,7 @@
 % verbose_flag: bool, set true for detailed bnb process info.
 % id: N x 1, the belonging 2D line id for each matched pair.
 % kernel: function, the saturation function.
+
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
 %%% Version: 1.0

@@ -1,5 +1,23 @@
+%%%%
+%   in order to solve interval for theta, simultaneously satisfying 
+%   A_1*sin(theta + phi_1)+ const_1 >=-epsilon
+%   and
+%   A_2*sin(theta + phi_2)+ const_2 <= epsilon
+
+%%% Inputs:
+% A_1, A_2:             Nx1
+% phi_1, phi_2:         Nx1
+% const_1, const_2:     Nx1
+% epsilon:              scalar
+
+%%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
+%           Xiang Zheng   <224045013@link.cuhk.edu.cn>
+%%% Version: 1.0
+%%% License: MIT
+%%%%
+
 function [interval] = upper_interval(A_1,phi_1,const_1,A_2,phi_2,const_2,epsilon)
-%%%%  f_max >= - epsilon
+% A_1*sin(theta + phi_1)+ const_1 >=-epsilon
 interval = [];
 upper_interval = [];
 c_lo = -const_1 -epsilon;
@@ -29,13 +47,7 @@ elseif c_lo>=-A_1
 else
     upper_interval = [0;pi];
 end
-
-
-
-
-
-
-%%%%%  f_min <= epsilon
+%   A_2*sin(theta + phi_2)+ const_2 <= epsilon
 lower_interval = [];
 c_up =  epsilon-const_2;
 

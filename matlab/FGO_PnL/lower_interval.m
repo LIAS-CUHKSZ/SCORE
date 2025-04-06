@@ -1,8 +1,18 @@
-function [interval] = lower_interval(A,phi,const,epsilon)
-%LOWER_INTERVAL 此处显示有关此函数的摘要
-%   in order to solve     
-%   |A sin(theta + phi )+ c| <=epsilon 
+%%%%
+%   in order to solve interval for theta satisfying 
+%   |A sin(theta + phi )+ const| <=epsilon 
 
+%%% Inputs:
+% A:        Nx1
+% phi:      Nx1
+% const:    Nx1
+% epsilon:  scalar
+
+%%% Author: Xiang Zheng   <224045013@link.cuhk.edu.cn>
+
+%%% Version: 1.0
+%%% License: MIT
+function [interval] = lower_interval(A,phi,const,epsilon)
     interval = [];
     c_up = -const + epsilon;
     c_lo = -const - epsilon;
