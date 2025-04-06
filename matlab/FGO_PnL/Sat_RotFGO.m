@@ -1,13 +1,21 @@
-function [R_opt,best_upper_record,best_lower_record,best_lower,num_candidate,time] = Sat_RotACM_My(vector_v,vector_n,branch_resolution,epsilon,sample_resolution,verbose_flag,id,kernel)
-%ACM_ROT_BNB 此处显示有关此函数的摘要
-%   此处显示详细说明
-%  vector_n    = N x 3;  represent the normal vector of the plane which contain the line_2d and the original point in camera frame
-%  vector_v    = N x 3;  represent the direction of the line_3d in world frame
-% resolution   = 1 x 1;  represent the min length of the interval during bnb process 
-%  epslion     = 1 x 1;  represent the threshold of the CM problem
-%     dt       = 1 x 1;  represent the resolution of the h2_bounds
-
-%% data process
+%%%%
+% Implementation of the FGO rotation estimator under saturated consensus maximization
+%%% Inputs:
+% vector_v: N x 3, the direction vector for each matched 3D map line.
+% vector_n: N x 3, the normal vector paramater for each 2D image line.
+% branch_resolution: scalar, stop bnb when cube length < resolution.
+% epsilon: scalar, for Sat-CM formulation.
+% sample_resolution: scalar, control resolution for interval analysis.
+% verbose_flag: bool, set true for detailed bnb process info.
+% id: N x 1, the belonging 2D line id for each matched pair.
+% kernel: function, the saturation function.
+%%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
+%           Xiang Zheng   <224045013@link.cuhk.edu.cn>
+%%% Version: 1.0
+%%% License: MIT
+%%%%
+function [R_opt,best_upper_record,best_lower_record,best_lower,num_candidate,time] = Sat_RotFGO(vector_v,vector_n,branch_resolution,epsilon,sample_resolution,verbose_flag,id,kernel)
+%%% data pre-process
 N = size(vector_n,1);
 [outer_product,outer_east,outer_west,  inner_product, normal_east, normal_west,  o_normal_east,  o_normal_west] = data_process(vector_n,vector_v);
 vector_normal_east = zeros(N,3);
@@ -17,8 +25,7 @@ vector_o_normal_west = zeros(N,3);
 vector_outer_west =zeros(N,3);
 vector_outer_east= zeros(N,3);
 outer_norm =zeros(N,1);
-%% which half sphere the vector belongs to  1: east  0: west
-outer_product_belong = zeros(N,1);
+outer_product_belong = zeros(N,1); % which half sphere the vector belongs to  1 for east and 0 for west
 for i = 1:N
     vector_normal_east(i,:) = [sin(normal_east(i,1))*cos(normal_east(i,2)),sin(normal_east(i,1))*sin(normal_east(i,2)),cos(normal_east(i,1))];
     vector_normal_west(i,:) = [sin(normal_west(i,1))*cos(normal_west(i,2)),sin(normal_west(i,1))*sin(normal_west(i,2)),cos(normal_west(i,1))];
@@ -54,15 +61,14 @@ line_pair.size = N;
 line_pair.outer_east = outer_east;
 line_pair.outer_west = outer_west;
 line_pair.outer_norm =outer_norm;
-%% BNB
+%%% start the BnB process
+% Initialization
 branch=[];
-% split into to hemisphere first
-B_east=[0;0;pi;pi];
-B_west=[0;pi;pi;2*pi];
+B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi]; % split into two semisphere.
 theta_0=zeros(2,1);
-[upper_east,lower_east,theta_0(1)]=Sat_Bounds_My(line_pair,B_east,epsilon,sample_resolution,id,kernel);    
+[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair,B_east,epsilon,sample_resolution,id,kernel);    
 branch=[branch,[B_east;upper_east;lower_east]];
-[upper_west,lower_west,theta_0(2)]=Sat_Bounds_My(line_pair,B_west,epsilon,sample_resolution,id,kernel);
+[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair,B_west,epsilon,sample_resolution,id,kernel);
 branch=[branch,[B_west;upper_west;lower_west]];
 best_upper = max(upper_east,upper_west);
 ind_upper = 2-(upper_east>upper_west);
@@ -85,7 +91,7 @@ tic
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_My(line_pair,new_branch(:,i),epsilon,sample_resolution,id,kernel);
+        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair,new_branch(:,i),epsilon,sample_resolution,id,kernel);
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end

@@ -95,9 +95,9 @@ gt_inliers = abs(dot(R_gt'*data_3d_v_clustered',data_2d_N_clustered'))<=epsilon_
 %%%%%% rot estimation %%%%%%%%%%%%%
 
 %%%%%%%%%%%%% plain_version
-% [R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotACM_My(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster,kernel);
+[R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotFGO(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster,kernel);
 %%%%%%%%%%%%% mex_version
-[R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotACM_My(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster);
+% [R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotFGO(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster);
 
 R_opt_sat_My = R_sat_My_transpose';
 found_inliers_sat_My = abs(dot(R_opt_sat_My'*data_3d_v_clustered',data_2d_N_clustered'))<=epsilon_r;

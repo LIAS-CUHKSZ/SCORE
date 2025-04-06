@@ -1,6 +1,20 @@
-function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_My(line_pair,Branch,epsilon,sample_resolution,id,kernel)
-%GET_UPPER_LOWER 此处显示有关此函数的摘要
-%   此处显示详细说明
+%%%%
+% Implementation of the FGO rotation estimator under saturated consensus maximization
+%%% Inputs:
+% vector_v: N x 3, the direction vector for each matched 3D map line.
+% vector_n: N x 3, the normal vector paramater for each 2D image line.
+% branch_resolution: scalar, stop bnb when cube length < resolution.
+% epsilon: scalar, for Sat-CM formulation.
+% sample_resolution: scalar, control resolution for interval analysis.
+% verbose_flag: bool, set true for detailed bnb process info.
+% id: N x 1, the belonging 2D line id for each matched pair.
+% kernel: function, the saturation function.
+%%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
+%           Xiang Zheng   <224045013@link.cuhk.edu.cn>
+%%% Version: 1.0
+%%% License: MIT
+%%%%
+function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel)
 [h1_upper,h1_lower] = h1_interval_mapping(line_pair,Branch,sample_resolution);
 [h2_upper,h2_lower] = h2_interval_mapping(line_pair,Branch,sample_resolution);
 N = line_pair.size;
