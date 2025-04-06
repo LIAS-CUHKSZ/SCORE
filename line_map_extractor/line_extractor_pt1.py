@@ -317,7 +317,7 @@ for i in range(0,len(depth_img_list)):
     scene_pose[basename] = pose_data[basename]["aligned_pose"]
     scene_intrinsic[basename] = intrinsic
 ### save the results
-np.save(line_data_folder+f"results_raw.npy", {
+np.save(line_data_folder+scene_id+f"_results_raw.npy", {
     "scene_pose": scene_pose,
     "scene_intrinsic": scene_intrinsic,
     "obj_id_label_id": obj_id_label_id,
@@ -356,7 +356,7 @@ for i in range(len(scene_line_3d_params)):
 point_sets = np.vstack(point_sets)
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(point_sets)
-o3d.io.write_point_cloud(line_mesh_raw_folder + f"raw_3d_line_mesh.ply", pcd)
+o3d.io.write_point_cloud(line_mesh_raw_folder + scene_id+f"_raw_3d_line_mesh.ply", pcd)
 print("Save raw 3D line mesh successfully.")
 print("Process completed.")
 

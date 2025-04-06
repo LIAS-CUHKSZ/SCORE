@@ -13,3 +13,4 @@ mesh_aligned_0.05point_cloud.txt
 line_map_extractor/out/**/*.jpg
 line_map_extractor/out/**/*.ply
 line_map_extractor/out/**/*.npy
+csv_dataset/**/*.csv
