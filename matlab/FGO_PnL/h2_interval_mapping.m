@@ -1,3 +1,17 @@
+%%%%
+% Calculate extreme values for h2 within a given sub-cube.
+% h2(u,v,n)  = n' [u]_x^2 v
+
+%%% Inputs:
+% line_pair:            data structure, comes from pre-processing.
+% Branch:               4 x 1, the given sub-cube.
+% sample_resolution:    scalar, control resolution for interval analysis.
+
+%%% Author:  Xiang Zheng   <224045013@link.cuhk.edu.cn>
+%%% Version: 1.0
+%%% License: MIT
+
+%%%%
 function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolution)
     N = line_pair.size;
     upper = zeros(N,1);
@@ -5,13 +19,13 @@ function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolutio
     cube_width = branch(3)-branch(1);
     maximum = 0;
     minimum = 0;
-    if cube_width <=sample_resolution
+    if cube_width <=sample_resolution % compare four vertices
         vertex_cache=zeros(4,3);
         vertex_cache(1,:)= polar_2_xyz(branch(1),branch(2));
         vertex_cache(2,:)= polar_2_xyz(branch(1),branch(4));
         vertex_cache(3,:)= polar_2_xyz(branch(3),branch(2));
         vertex_cache(4,:)= polar_2_xyz(branch(3),branch(4));
-    else 
+    else % search on the boundaries
         alpha = branch(1):sample_resolution:branch(3);
         phi = branch(2):sample_resolution:branch(4);
         temp = length(alpha)-1;
@@ -78,7 +92,6 @@ end
 function output = vec_polar2xyz(alpha,phi)
     % output  N*3
     n = max(length(alpha),length(phi));
-    
     output = zeros(n,3);
     as = sin(alpha');
     output(:,3) = cos(alpha');

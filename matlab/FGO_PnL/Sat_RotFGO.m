@@ -63,33 +63,33 @@ line_pair.size = N;
 line_pair.outer_east = outer_east;
 line_pair.outer_west = outer_west;
 line_pair.outer_norm =outer_norm;
-%%% start the BnB process
-% Initialization
+%%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
+tic
+%%% Initialize the BnB process
+% calculate bounds for east and west semispheres.
 branch=[];
-B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi]; % split into two semisphere.
+B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
 theta_0=zeros(2,1);
 [upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair,B_east,epsilon,sample_resolution,id,kernel);    
 branch=[branch,[B_east;upper_east;lower_east]];
 [upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair,B_west,epsilon,sample_resolution,id,kernel);
 branch=[branch,[B_west;upper_west;lower_west]];
-best_upper = max(upper_east,upper_west);
-ind_upper = 2-(upper_east>upper_west);
+% record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
 ind_lower = 2-(lower_east>lower_west);
 theta_best = theta_0(ind_lower);
 r_branch=branch(1:4,ind_lower);
 u_best=polar_2_xyz(0.5*(r_branch(1)+r_branch(3)),0.5*(r_branch(2)+r_branch(4)));
-%%%
+% select the next exploring branch according to the upper bounds
+best_upper = max(upper_east,upper_west);
+ind_upper = 2-(upper_east>upper_west);
 next_branch=branch(1:4,ind_upper);
 branch(:,ind_upper)=[];
-branch(:,branch(5,:)<best_lower)=[];
-new_upper=zeros(1,4);
-new_lower=zeros(1,4);
-new_theta_lower=zeros(1,4);
+% record bounds history
+best_upper_record=best_upper; best_lower_record=best_lower;
+%%% start BnB
+new_upper=zeros(1,4); new_lower=zeros(1,4); new_theta_lower=zeros(1,4);
 iter=1;
-best_upper_record=best_upper;
-best_lower_record=best_lower;
-tic
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
@@ -127,7 +127,7 @@ while true
     end
     iter=iter+1;
 end
-%% stop branching
+%%% output
 num_candidate=size(r_branch,2);
 R_opt=[];
 for i=1:num_candidate

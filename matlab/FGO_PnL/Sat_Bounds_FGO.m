@@ -13,6 +13,7 @@
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
+
 %%%%
 function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel)
 N = line_pair.size;
@@ -48,7 +49,6 @@ for i = 1:N
     intervals_upper=[intervals_upper;tmp_interval];
     ids_upper = [ids_upper;id(i)*ones(length(tmp_interval)/2,1)];
 end
-[Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel);
 %
 [Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel);
 end
