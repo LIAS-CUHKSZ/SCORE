@@ -10,8 +10,8 @@
 %%% Author:  Xiang Zheng   <224045013@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
-
 %%%%
+
 function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolution)
     N = line_pair.size;
     upper = zeros(N,1);

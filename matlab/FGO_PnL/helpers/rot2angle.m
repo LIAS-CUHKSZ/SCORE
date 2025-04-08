@@ -1,8 +1,7 @@
 function [alpha, phi,theta] = rot2angle(R)
         axis =  rotmat2vec3d(R);
         theta = norm(axis);
-
-        % 计算旋转角alpha和phi
+        
         if axis(1)==0 && axis(2)==0
             phi = 0;
             alpha = acos(axis(3));

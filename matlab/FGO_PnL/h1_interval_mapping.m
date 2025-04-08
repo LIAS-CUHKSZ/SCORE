@@ -10,8 +10,8 @@
 %%% Author:  Xiang Zheng   <224045013@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
-
 %%%%
+
 function [upper,lower] =h1_interval_mapping(line_pair,branch,sample_resolution)
 N = line_pair.size;
 upper = zeros(N,1);
@@ -182,4 +182,23 @@ end
 
 
 end
+
+function [far,near] = interval_projection(a, interval)
+%   a is a given scalar, x falls in a given interval
+%  return  far= argmax_x |x-a| , near= argmin_x |x-a| 
+    if a <interval(1)
+        far = interval(2);
+        near = interval(1);
+    elseif a<= (interval(1)+interval(2))/2
+        far = interval(2);
+        near= a;
+    elseif a<=interval(2)
+        far = interval(1);
+        near = a;
+    else
+        far = interval(1);
+        near= interval(2);
+    end
+end
+
 

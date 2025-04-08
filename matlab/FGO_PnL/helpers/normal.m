@@ -16,7 +16,6 @@ function [normal_east,normal_west,o_normal_east,o_normal_west] = normal(v1,v2)
         return;
     end
     mid = mid/norm(mid);
-    
     n =cross(v1,v2);
     n = n/norm(n);
     orthogonal = cross(mid,n);
@@ -37,7 +36,5 @@ function [normal_east,normal_west,o_normal_east,o_normal_west] = normal(v1,v2)
         o_normal_east = [alpha_orthogonal, phi_orthogonal];
         o_normal_west = [pi-alpha_orthogonal, phi_orthogonal+pi];
     end
-
-
 end
 

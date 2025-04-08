@@ -16,53 +16,10 @@
 %%% Version: 1.0
 %%% License: MIT
 %%%%
+
 function [R_opt,best_upper_record,best_lower_record,best_lower,num_candidate,time] = Sat_RotFGO(vector_v,vector_n,branch_resolution,epsilon,sample_resolution,verbose_flag,id,kernel)
 %%% data pre-process
-N = size(vector_n,1);
-[outer_product,outer_east,outer_west,  inner_product, normal_east, normal_west,  o_normal_east,  o_normal_west] = data_process(vector_n,vector_v);
-vector_normal_east = zeros(N,3);
-vector_normal_west = zeros(N,3);
-vector_o_normal_east = zeros(N,3);
-vector_o_normal_west = zeros(N,3);
-vector_outer_west =zeros(N,3);
-vector_outer_east= zeros(N,3);
-outer_norm =zeros(N,1);
-outer_product_belong = zeros(N,1); % which half sphere the vector belongs to  1 for east and 0 for west
-for i = 1:N
-    vector_normal_east(i,:) = [sin(normal_east(i,1))*cos(normal_east(i,2)),sin(normal_east(i,1))*sin(normal_east(i,2)),cos(normal_east(i,1))];
-    vector_normal_west(i,:) = [sin(normal_west(i,1))*cos(normal_west(i,2)),sin(normal_west(i,1))*sin(normal_west(i,2)),cos(normal_west(i,1))];
-    vector_o_normal_east(i,:) = [sin(o_normal_east(i,1))*cos(o_normal_east(i,2)),sin(o_normal_east(i,1))*sin(o_normal_east(i,2)),cos(o_normal_east(i,1))];
-    vector_o_normal_west(i,:) = [sin(o_normal_west(i,1))*cos(o_normal_west(i,2)),sin(o_normal_west(i,1))*sin(o_normal_west(i,2)),cos(o_normal_west(i,1))];
-    outer_norm(i) = norm(outer_product(i,:));
-    if outer_product(i,2) >= 0
-        outer_product_belong(i) = 1;
-        vector_outer_east(i,:) =outer_product(i,:);
-        vector_outer_west(i,:) =-outer_product(i,:);
-    else
-        vector_outer_east(i,:) =-outer_product(i,:);
-        vector_outer_west(i,:) = outer_product(i,:);
-        outer_product_belong(i) = 0;
-    end
-end
-line_pair.outer_product_belong = outer_product_belong;
-line_pair.vector_normal_east = vector_normal_east;
-line_pair.vector_normal_west = vector_normal_west;
-line_pair.vector_o_normal_east = vector_o_normal_east;
-line_pair.vector_o_normal_west = vector_o_normal_west;
-line_pair.inner_product = inner_product;
-line_pair.outer_product = outer_product;
-line_pair.vector_outer_east = vector_outer_east;
-line_pair.vector_outer_west = vector_outer_west;
-line_pair.normal_east = normal_east;
-line_pair.normal_west = normal_west;
-line_pair.o_normal_east = o_normal_east;
-line_pair.o_normal_west = o_normal_west;
-line_pair.vector_n = vector_n;
-line_pair.vector_v = vector_v;
-line_pair.size = N;
-line_pair.outer_east = outer_east;
-line_pair.outer_west = outer_west;
-line_pair.outer_norm =outer_norm;
+line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
 tic
 %%% Initialize the BnB process
@@ -70,9 +27,9 @@ tic
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
 theta_0=zeros(2,1);
-[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair,B_east,epsilon,sample_resolution,id,kernel);    
+[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon,sample_resolution,id,kernel);    
 branch=[branch,[B_east;upper_east;lower_east]];
-[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair,B_west,epsilon,sample_resolution,id,kernel);
+[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon,sample_resolution,id,kernel);
 branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
@@ -93,7 +50,7 @@ iter=1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair,new_branch(:,i),epsilon,sample_resolution,id,kernel);
+        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon,sample_resolution,id,kernel);
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end
@@ -136,3 +93,19 @@ end
 time=toc;
 end
 
+
+function out=subBranch(branch)
+% divide the input 2D cube into four subcubes
+a=branch(1:2);
+b=branch(3:end);
+c=0.5*(a+b);
+M=[a,c,b];
+out=zeros(4,4);
+for i=1:4
+    out(1,i)= M(1,bitget(i,1)+1);
+    out(2,i)= M(2,bitget(i,2)+1);
+    out(3,i)= M(1,bitget(i,1)+2);
+    out(4,i)= M(2,bitget(i,2)+2);
+end
+
+end

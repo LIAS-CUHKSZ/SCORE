@@ -96,13 +96,8 @@ gt_inliers = abs(dot(R_gt'*data_3d_v_clustered',data_2d_N_clustered'))<=epsilon_
 
 %%%%%%%%%%%%% plain_version
 [R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotFGO(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster,kernel);
-%%%%%%%%%%%%% mex_version
-% [R_sat_My_transpose,U_record_sat_My,L_record_sat_My,best_L_sat_My,num_candidate_sat_My,time_sat_My] =Sat_RotFGO(data_3d_v_clustered,data_2d_N_clustered,branch_resolution ,epsilon_r,sample_resolution,verbose_flag,id_cluster);
-
 R_opt_sat_My = R_sat_My_transpose';
 found_inliers_sat_My = abs(dot(R_opt_sat_My'*data_3d_v_clustered',data_2d_N_clustered'))<=epsilon_r;
-
-
 index_inlier=find(abs(dot(R_opt_sat_My'*data_3d_v',data_2d_N'))<=epsilon_r);
 id_inliers = id(index_inlier);
 N_2d_rot_inlier=data_2d_N(index_inlier,:);
@@ -114,7 +109,7 @@ if length(unique(id_inliers))<4
     sprintf("not enough inliers")
     return
 else
-    [t_opt_sat_var,num_candidate,max_score] = sat_var_t_Ransac(N_2d_rot_inlier',c_3d_rot_inlier',R_opt_sat_My,id_inliers,sampleSize,ransac_iterations,epsilon_t,kernel,test_room_size);
+    [t_opt_sat_var,num_candidate,max_score] = Sat_t_ransac(N_2d_rot_inlier',c_3d_rot_inlier',R_opt_sat_My,id_inliers,sampleSize,ransac_iterations,epsilon_t,kernel,test_room_size);
 end
 
 %% Error calculation

@@ -1,14 +1,17 @@
 %%%%
 % Implementation of saturated interval stabbing
+
 %%% Inputs:
 % Intervals: 2Lx1, specify the endpoints for L intervals in sequence
 % ids: Lx1, the group id for each interval
 % kernel: the adopted saturation function
+
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
 %%%%
+
 function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals,ids,kernel)
     persistent kernel_buff; % only need to compute the buffer once
     if isempty(kernel_buff)

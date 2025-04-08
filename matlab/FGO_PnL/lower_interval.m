@@ -9,9 +9,9 @@
 % epsilon:  scalar
 
 %%% Author: Xiang Zheng   <224045013@link.cuhk.edu.cn>
-
 %%% Version: 1.0
 %%% License: MIT
+
 function [interval] = lower_interval(A,phi,const,epsilon)
     interval = [];
     c_up = -const + epsilon;
