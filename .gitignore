@@ -14,3 +14,4 @@ line_map_extractor/out/**/*.jpg
 line_map_extractor/out/**/*.ply
 line_map_extractor/out/**/*.npy
 csv_dataset/**/*.csv
+csv_dataset/**/*.mat
