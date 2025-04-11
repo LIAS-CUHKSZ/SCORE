@@ -15,7 +15,7 @@
 %%% License: MIT
 
 %%%%
-function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel)
+function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel_buffer)
 N = line_pair.size;
 %%% calculate lower bound by taking the center point
 % obtain the interval for each matched pair
@@ -33,8 +33,9 @@ for i = 1:N
     intervals_lower=[intervals_lower;tmp_interval];
     ids_lower = [ids_lower;id(i)*ones(length(tmp_interval)/2,1)];
 end
+
 % 
-[Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel);
+[Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buffer);
 
 %%% calculate upper bound based on rigoros interval anlaysis
 % obtain the interval for each matched pair
@@ -50,7 +51,7 @@ for i = 1:N
     ids_upper = [ids_upper;id(i)*ones(length(tmp_interval)/2,1)];
 end
 %
-[Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel);
+[Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buffer);
 end
 
 %%%

@@ -9,7 +9,7 @@
 % sample_resolution: scalar, control resolution for interval analysis.
 % verbose_flag: bool, set true for detailed bnb process info.
 % id: N x 1, the belonging 2D line id for each matched pair.
-% kernel: function, the saturation function.
+% kernel_buffer: store weights given by the selected saturation function.
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
@@ -17,7 +17,7 @@
 %%% License: MIT
 %%%%
 
-function [R_opt,best_upper_record,best_lower_record,best_lower,num_candidate,time] = Sat_RotFGO(vector_v,vector_n,branch_resolution,epsilon,sample_resolution,verbose_flag,id,kernel)
+function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag)
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
@@ -27,9 +27,9 @@ tic
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
 theta_0=zeros(2,1);
-[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon,sample_resolution,id,kernel);    
+[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
 branch=[branch,[B_east;upper_east;lower_east]];
-[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon,sample_resolution,id,kernel);
+[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
 branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
@@ -43,27 +43,29 @@ ind_upper = 2-(upper_east>upper_west);
 next_branch=branch(1:4,ind_upper);
 branch(:,ind_upper)=[];
 % record bounds history
-best_upper_record=best_upper; best_lower_record=best_lower;
+upper_record=best_upper; lower_record=best_lower;
 %%% start BnB
 new_upper=zeros(1,4); new_lower=zeros(1,4); new_theta_lower=zeros(1,4);
 iter=1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon,sample_resolution,id,kernel);
+        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end
     end
+    new_upper=round(new_upper,4);
+    new_lower=round(new_lower,4);
     branch=[branch,[new_branch;new_upper;new_lower]];
     % branch_t=branch';
     for i=1:4
-        if  floor(new_lower(i))>floor(best_lower)
+        if  new_lower(i)>best_lower
             best_lower=new_lower(i);
             r_branch=new_branch(1:4,i);
             u_best=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)) , 0.5*(new_branch(2,i)+new_branch(4,i)) );
             theta_best = new_theta_lower(i);
-        elseif floor(new_lower(i))==floor(best_lower)
+        elseif new_lower(i)==best_lower
             u_new=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)),0.5*(new_branch(2,i)+new_branch(4,i)));
             if max(u_new'*u_best)<cosd(3) % the new axis is not proximate to cur axises
                 r_branch=[r_branch,new_branch(1:4,i)];
@@ -73,13 +75,13 @@ while true
         else
         end
     end
-    % best_upper_record=[best_upper_record;best_upper];
-    % best_lower_record=[best_lower_record;best_lower];
+    upper_record=[upper_record;best_upper];
+    lower_record=[lower_record;best_lower];
     [best_upper,ind_upper]=max(branch(5,:));
     next_branch=branch(1:4,ind_upper);
     branch(:,ind_upper)=[];
     branch(:,branch(5,:)<best_lower)=[];
-    if (  (new_branch(3,1) - new_branch(1,1)) < branch_resolution )
+    if (  (new_branch(3,1) - new_branch(1,1)) < branch_reso )
         break;
     end
     iter=iter+1;
