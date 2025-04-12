@@ -2,14 +2,17 @@
 % Implementation of the FGO rotation estimator under saturated consensus maximization
 
 %%% Inputs:
-% vector_v: N x 3, the direction vector for each matched 3D map line.
 % vector_n: N x 3, the normal vector paramater for each 2D image line.
-% branch_resolution: scalar, stop bnb when cube length < resolution.
-% epsilon: scalar, for Sat-CM formulation.
-% sample_resolution: scalar, control resolution for interval analysis.
-% verbose_flag: bool, set true for detailed bnb process info.
+% vector_v: N x 3, the direction vector for each matched 3D map line.
 % id: N x 1, the belonging 2D line id for each matched pair.
 % kernel_buffer: store weights given by the selected saturation function.
+% branch_reso: scalar, stop bnb when cube length < resolution.
+% epsilon_r: scalar, for Sat-CM formulation.
+% sample_reso: scalar, control resolution for interval analysis.
+% verbose_flag: bool, set true for detailed bnb process info.
+% mex_flag: bool, set true to use mex code for acceleration.
+
+
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
@@ -17,7 +20,7 @@
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag)
+function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag)
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
@@ -27,9 +30,14 @@ tic
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
 theta_0=zeros(2,1);
-[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+if mex_flag
+    [upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+    [upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
+else
+    [upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+    [upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
+end
 branch=[branch,[B_east;upper_east;lower_east]];
-[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
 branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
@@ -50,13 +58,17 @@ iter=1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
+        if mex_flag
+            [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO_mex(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
+        else
+            [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
+        end
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end
     end
-    new_upper=round(new_upper,4);
-    new_lower=round(new_lower,4);
+    new_upper=round(new_upper,2);
+    new_lower=round(new_lower,2);
     branch=[branch,[new_branch;new_upper;new_lower]];
     % branch_t=branch';
     for i=1:4

@@ -26,8 +26,8 @@ output_filename= "matlab/Experiments/record/"+dataset_idx+"_rotation_record.mat"
 folder_name="csv_dataset/"+dataset_idx+"/";
 load(folder_name+"lines3D.mat");
 numRows=11000;
-column_names=["Image Index","Time","Orient Err","# 2D lines with match","Score","Score under gt"];
-columnTypes = ["int32","double","double","int32","double","double"];
+column_names=["Image Index","Time","Orient Err","# 2D lines with match","Score","Score under gt","# candidates"];
+columnTypes = ["int32","double","double","int32","double","double","int32"];
 Record_SCM_FGO_clustered     =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 Record_SCM_FGO_unclustered   =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 % Record_CM_FGO =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
@@ -43,11 +43,12 @@ end
 line_num_thres=20; % minimal number of 2D lines required in the image
 total_picture=100; 
 % rotation bnb
-verbose_flag=0;
-epsilon_r = 0.03;
+verbose_flag=0; % verbose mode for BnB
+mex_flag=1; % use mex code to further accelerate BnB
 branch_reso = pi/1024;
 sample_reso = pi/512;
-for num =16:total_picture
+parfor num =60:100
+    num
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",num*10);
     if ~exist(folder_name+"lines2d\frame_"+frame_id+"2dlines.csv",'file')
@@ -59,6 +60,7 @@ for num =16:total_picture
     if length(lines2D)<line_num_thres
         continue
     end
+    epsilon_r=max(lines2D(:,6)*1.25);
     K_p=readmatrix(folder_name+"intrinsics\frame_"+frame_id+".csv");
     K=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1];
     T_gt = readmatrix(folder_name+"poses\frame_"+frame_id+".csv");
@@ -68,10 +70,10 @@ for num =16:total_picture
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
     [data_2D_n,data_3D_v,id]=match_line(lines2D,lines3D); 
-    fprintf("# match with all 3D lines:%d\n",length(id));
+    % fprintf("# match with all 3D lines:       %d\n",length(id));
     % match with clustered 3D lines 
     [data_2D_n_clustered,data_3D_v_clustered,id_cluster]=match_line(lines2D,lines3D_cluster);
-    fprintf("# match with clustering:  %d\n",length(id_cluster)); 
+    % fprintf("# match with clustered 3D lines: %d\n",length(id_cluster)); 
     clustered_match_num=0;
     for i=1:size(lines2D,1)
         idx_matched_3D = find(abs(lines3D_cluster(:,7)-lines2D(i,4))<0.1);
@@ -84,21 +86,18 @@ for num =16:total_picture
     gt_score = calculate_score(gt_inliers_id,kernel_buffer);
     num_2D_line_match=length(unique(id_cluster));
     % Sat_FGO_clustered
-    [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotFGO(data_2D_n_clustered,data_3D_v_clustered,id_cluster,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag);
+    [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotFGO(data_2D_n_clustered,data_3D_v_clustered,id_cluster,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag);
+    line_pair_data = data_process(data_2D_n_clustered,data_3D_v_clustered);
+    %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
+    %%% Initialize the BnB process
+    % calculate bounds for east and west semispheres.
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
     est_inliers_idx=find(abs(dot(R_opt'*data_3D_v_clustered',data_2D_n_clustered'))<=epsilon_r);
     est_inliers_id = id_cluster(est_inliers_idx);
-    % figure(1)
-    % histogram(gt_inliers_id,max(gt_inliers_id)-min(gt_inliers_id))
-    % figure(2)
-    % histogram(est_inliers_id,max(est_inliers_id)-min(est_inliers_id))
-    column_names=["Image Index","Time","Orient Err","# 2D lines with match","Score","Score under gt"];
-    Record_SCM_FGO_clustered(num+1,:)={num*10,time,min_err,num_2D_line_match,best_score,gt_score};
+    Record_SCM_FGO_clustered(num+1,:)={num*10,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
 end
-
 % save(output_filename,"Record_CM_EGO","Record_CM_FGO","Record_SCM_FGO_unclustered","Record_SCM_EGO_clustered", ...
 %                             "Record_SCM_FGO_clustered","sampleSize","sample_resolution","epsilon_r","branch_resolution");
-
 function []=plot_bound_record(L_record,U_record)
     plot(1:length(U_record),U_record,'Color','b')
     hold on
