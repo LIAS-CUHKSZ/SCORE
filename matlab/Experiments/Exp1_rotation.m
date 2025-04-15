@@ -12,6 +12,7 @@
 clear;
 clc;
 % candidate saturation functions
+kernel_0 = @(x) 1;             % choose this kernel for regular consensus maximization
 kernel_1 = @(x) exp(-x+1);
 kernel_2 = @(x) x^-2;
 kernel_3 = @(x) x^-8;
@@ -29,9 +30,9 @@ numRows=11000;
 column_names=["Image Index","Time","Orient Err","# 2D lines with match","Score","Score under gt","# candidates"];
 columnTypes = ["int32","double","double","int32","double","double","int32"];
 Record_SCM_FGO_clustered     =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_SCM_FGO_unclustered   =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-% Record_CM_FGO =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_all           =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 % Record_SCM_EGO_clustered    =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+% Record_CM_FGO =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 % Record_CM_EGO=table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 %%%  params
 kernel = kernel_3;
@@ -47,6 +48,7 @@ verbose_flag=0; % verbose mode for BnB
 mex_flag=1; % use mex code to further accelerate BnB
 branch_reso = pi/1024;
 sample_reso = pi/512;
+% for num =60:100
 parfor num =60:100
     num
     %%% read 2D line data of cur image
@@ -60,7 +62,7 @@ parfor num =60:100
     if length(lines2D)<line_num_thres
         continue
     end
-    epsilon_r=max(lines2D(:,6)*1.25);
+    epsilon_r=max(lines2D(:,6)*1.35);
     K_p=readmatrix(folder_name+"intrinsics\frame_"+frame_id+".csv");
     K=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1];
     T_gt = readmatrix(folder_name+"poses\frame_"+frame_id+".csv");
@@ -70,7 +72,6 @@ parfor num =60:100
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
     [data_2D_n,data_3D_v,id]=match_line(lines2D,lines3D); 
-    % fprintf("# match with all 3D lines:       %d\n",length(id));
     % match with clustered 3D lines 
     [data_2D_n_clustered,data_3D_v_clustered,id_cluster]=match_line(lines2D,lines3D_cluster);
     % fprintf("# match with clustered 3D lines: %d\n",length(id_cluster)); 
@@ -87,17 +88,18 @@ parfor num =60:100
     num_2D_line_match=length(unique(id_cluster));
     % Sat_FGO_clustered
     [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotFGO(data_2D_n_clustered,data_3D_v_clustered,id_cluster,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag);
-    line_pair_data = data_process(data_2D_n_clustered,data_3D_v_clustered);
-    %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
-    %%% Initialize the BnB process
-    % calculate bounds for east and west semispheres.
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
-    est_inliers_idx=find(abs(dot(R_opt'*data_3D_v_clustered',data_2D_n_clustered'))<=epsilon_r);
-    est_inliers_id = id_cluster(est_inliers_idx);
     Record_SCM_FGO_clustered(num+1,:)={num*10,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
+    % % Sat_FGO_all
+    % [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotFGO(data_2D_n,data_3D_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag);
+    % [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
+    % Record_SCM_FGO_all(num+1,:)={num*10,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
 end
 % save(output_filename,"Record_CM_EGO","Record_CM_FGO","Record_SCM_FGO_unclustered","Record_SCM_EGO_clustered", ...
 %                             "Record_SCM_FGO_clustered","sampleSize","sample_resolution","epsilon_r","branch_resolution");
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function []=plot_bound_record(L_record,U_record)
     plot(1:length(U_record),U_record,'Color','b')
     hold on
