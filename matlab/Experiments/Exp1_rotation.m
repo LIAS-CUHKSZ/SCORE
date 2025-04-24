@@ -12,6 +12,7 @@
 clear;
 clc;
 % candidate saturation functions
+kernel_0 = @(x) 1;             % choose this kernel for regular consensus maximization
 kernel_1 = @(x) exp(-x+1);
 kernel_2 = @(x) x^-2;
 kernel_3 = @(x) x^-8;
@@ -95,6 +96,9 @@ for num =60:100
 end
 % save(output_filename,"Record_CM_EGO","Record_CM_FGO","Record_SCM_FGO_unclustered","Record_SCM_EGO_clustered", ...
 %                             "Record_SCM_FGO_clustered","sampleSize","sample_resolution","epsilon_r","branch_resolution");
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function []=plot_bound_record(L_record,U_record)
     plot(1:length(U_record),U_record,'Color','b')
     hold on
