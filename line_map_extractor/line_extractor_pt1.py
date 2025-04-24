@@ -3,11 +3,11 @@ line_extractor_pt1.py
 
 This script extracts 2D lines from images and regresses 3D lines from the 2D lines based on pose and depth.
 We assign each pair of 2D and 3D line with the same semantic label. 
-You can tune the paramters defined in helper.py, and edit the label_remapping.txt file.
+You can tune the paramters defined in helper.py, and edit the label_remapping.txt file under /dictionary.
 
 Output:
 - Rgb images annotated with extracted lines thier semantic labels. 
-- Mesh file(.ply) with all regressed 3D lines.
+- Mesh file(.ply) with all regressed 3D lines for visualization.
 - A numpy file containing all the extracted 2D lines and regressed 3D lines.
 
 Author: Haodong JIANG <221049033@link.cuhk.edu.cn>
@@ -282,13 +282,13 @@ def process_file(i, depth_img_name):
     cv2.imwrite(os.path.join(line_image_folder, f"{basename}.jpg"), rgb_color)    
     return (basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t)
 results=[]
-## unparalled version for debugging:
+## unparalled code to process files
 # for i, depth_img_name in enumerate(depth_img_list):
 #     if i > -1:
 #         result = process_file(i,depth_img_name)
 #         results.append(result)
 
-### Use parallel processing to process files
+### parallel code to process files
 results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(i, depth_img_name) for i, depth_img_name in enumerate(depth_img_list))
 for result in results:
     basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t = result
@@ -341,6 +341,7 @@ np.save(line_data_folder+scene_id+f"_results_raw.npy", {
 })
 print("Save data successfully.")
 
+#################################################
 ### save all regressed 3d lines for visualization
 point_sets=[]
 for i in range(len(scene_line_3d_params)):
