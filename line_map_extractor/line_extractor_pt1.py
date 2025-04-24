@@ -28,13 +28,15 @@ from joblib import Parallel, delayed
 from scipy import stats
 
 ################################### Loading and Configuring ###################################
-home = os.path.expanduser("~")
+root_dir = "/data1/home/lucky/ELSED"
 scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
-scene_id = scene_list[2]
-rgb_folder = home+f"/SCORE/dataset/{scene_id}/rgb/"
-depth_image_folder = home+f"/SCORE/dataset/{scene_id}/render_depth/"
+scene_id = scene_list[0]
+rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
+depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
 rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
+#downsample
+depth_img_list= depth_img_list[::10]
 # remove the depth images that do not have corresponding rgb images
 k = 0
 while(k<len(depth_img_list)):
@@ -44,15 +46,15 @@ while(k<len(depth_img_list)):
         depth_img_list.remove(depth_img_name)
     else:
         k=k+1
-pose_file = home+f"/SCORE/dataset/{scene_id}/pose_intrinsic_imu.json" # camera pose to world
-anno_file = home+f"/SCORE/dataset/{scene_id}/scans/segments_anno.json"
-segments_file = home+f"/SCORE/dataset/{scene_id}/scans/segments.json"
-instance_path = home+f"/SCORE/dataset/{scene_id}/obj_ids/"
+pose_file = root_dir+f"/SCORE/dataset/{scene_id}/iphone/pose_intrinsic_imu.json" # camera pose to world
+anno_file = root_dir+f"/SCORE/dataset/{scene_id}/scans/segments_anno.json"
+segments_file = root_dir+f"/SCORE/dataset/{scene_id}/scans/segments.json"
+instance_path = root_dir+f"/SCORE/dataset/{scene_id}/obj_ids/"
 ### result saving path
-dictionary_folder = home+f"/SCORE/dictionary/{scene_id}/"
-line_image_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2d lines and labels
-line_mesh_raw_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3d lines
-line_data_folder = home+f"/SCORE/line_map_extractor/out/{scene_id}/" # numpy file with all the extracted 2d lines and regressed 3d lines
+dictionary_folder = root_dir+f"/SCORE/dictionary/{scene_id}/"
+line_image_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2d lines and labels
+line_mesh_raw_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3d lines
+line_data_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/" # numpy file with all the extracted 2d lines and regressed 3d lines
 for out_path in [line_image_folder, line_mesh_raw_folder,dictionary_folder]:
     if not os.path.exists(out_path):
         os.makedirs(out_path)
@@ -88,7 +90,7 @@ label_2_semantic_dict = {v:k for k,v in labels.items()}
 # if the second column is not zero, the original label is remapped to the new label 
 label_remapping_file = open(label_remapping_file, "r")
 label_remapped = np.array(range(len(label_2_semantic_dict)))+1
-for line in label_remapping_file:
+for line in label_remapping_file: 
     line = line.strip().split(",")
     label_1 = int(line[0])
     label_2 = int(line[1])
@@ -157,7 +159,7 @@ def process_file(i, depth_img_name):
     ### Extract and Prune 2d Line segments
     segments = helper.extract_and_prune_2dlines(rgb) 
     ### Regress 3d Lines
-    line_2d_count = 0
+    line_2d_count = 0 # valid 2D line id in the cur image
     for j, segment in enumerate(segments):
         x1, y1, x2, y2 = segment.astype(np.int32)
         if x2 >= render_depth.shape[1] or y1 >= render_depth.shape[0] or y2 >= render_depth.shape[0]:
@@ -198,7 +200,7 @@ def process_file(i, depth_img_name):
             else:
                 break
         if depth_mean[best_one]==255:
-            print("extrct 3d points fail")
+            print("extract 3d points fail")
             error_rot   = -1
             error_trans = -1
             continue
@@ -246,18 +248,20 @@ def process_file(i, depth_img_name):
                 points_world_3d, LineModelND, min_samples=3, residual_threshold=0.02, max_trials=3000
             )
         except:
-            print("extrct 3d line fails")
+            print("extract 3d line fails")
             cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
-            error_rot   = -1
-            error_trans = -1
+            proj_error_r.append(np.nan)
+            proj_error_t.append(np.nan)
+            line_2d_match_idx.append(np.nan)
             continue
         inlier_index = inliers == True
         # if the number of inliers is less than a threshold, we discard this 3d line
         if len(inlier_index) < helper.params_2d["line_points_num_thresh"]:
-            print("extrct 3d line fails")
+            print("extract 3d line fails")
             cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
-            error_rot   = -1
-            error_trans = -1
+            proj_error_r.append(np.nan)
+            proj_error_t.append(np.nan)
+            line_2d_match_idx.append(np.nan)
             continue
         # obtain and store 3D line paramaters
         v = model_robust.params[1]
@@ -297,7 +301,7 @@ for result in results:
     scene_line_2d_end_points[basename] = line_2d_end_points
     scene_line_2d_params[basename] = line_2d_params
     scene_line_2d_semantic_labels[basename] = line_2d_semantic_label
-    for i in range(len(line_2d_match_idx)):
+    for i in range(len(line_2d_match_idx)): ## idx of the matched 3D line 
         if line_2d_match_idx[i] != None:
             line_2d_match_idx[i] = line_2d_match_idx[i]+len(scene_line_3d_params)
     scene_line_2d_match_idx[basename] = np.array(line_2d_match_idx)
