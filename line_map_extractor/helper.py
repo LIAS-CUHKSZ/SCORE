@@ -13,7 +13,7 @@ from sklearn.cluster import KMeans
 # parameters for line_extractor_pt1
 params_2d = {
     # for parallel computing
-    "thread_number": 16,                                 
+    "thread_number": 32,                                 
     # for 2d line extractor
     "sigma": 1,
     "gradientThreshold": 20,

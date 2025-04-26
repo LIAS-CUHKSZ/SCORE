@@ -30,13 +30,12 @@ from scipy import stats
 ################################### Loading and Configuring ###################################
 root_dir = "/data1/home/lucky/ELSED"
 scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
-scene_id = scene_list[0]
+scene_id = scene_list[3]
 rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
 depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
 rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
-#downsample
-depth_img_list= depth_img_list[::10]
+depth_img_list= depth_img_list[::4] #downsample
 # remove the depth images that do not have corresponding rgb images
 k = 0
 while(k<len(depth_img_list)):
@@ -178,8 +177,8 @@ def process_file(i, depth_img_name):
             else:
                 x = np.arange(min(x1, x2), max(x1, x2))
                 y = m * x + c
-        x = x.astype(np.int32) # since we only have depth on integer pixels
-        y = y.astype(np.int32) # since we only have depth on integer pixels
+        x = x.astype(np.int32) # since scannet++ only provides depth on integer pixels
+        y = y.astype(np.int32) # since scannet++ only provides depth on integer pixels
         line_2d_param_pixel = np.array([A, B, C])
         v = np.array([x2-x1,y2-y1])
         if np.linalg.norm(v)==0:
@@ -200,7 +199,7 @@ def process_file(i, depth_img_name):
             else:
                 break
         if depth_mean[best_one]==255:
-            print("extract 3d points fail")
+            print("Failure: no depth info for this 2d line")
             error_rot   = -1
             error_trans = -1
             continue
@@ -248,7 +247,7 @@ def process_file(i, depth_img_name):
                 points_world_3d, LineModelND, min_samples=3, residual_threshold=0.02, max_trials=3000
             )
         except:
-            print("extract 3d line fails")
+            print("Faliure: 3D line regression")
             cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
             proj_error_r.append(np.nan)
             proj_error_t.append(np.nan)
@@ -257,7 +256,7 @@ def process_file(i, depth_img_name):
         inlier_index = inliers == True
         # if the number of inliers is less than a threshold, we discard this 3d line
         if len(inlier_index) < helper.params_2d["line_points_num_thresh"]:
-            print("extract 3d line fails")
+            print("Faliure: 3D line regression")
             cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
             proj_error_r.append(np.nan)
             proj_error_t.append(np.nan)
@@ -299,10 +298,9 @@ for result in results:
     #
     scene_line_2d_points[basename] = line_2d_points
     scene_line_2d_end_points[basename] = line_2d_end_points
-    scene_line_2d_params[basename] = line_2d_params
+    scene_line_2d_params[basename] = line_2d_params # n_c=[A B C]
     scene_line_2d_semantic_labels[basename] = line_2d_semantic_label
     for i in range(len(line_2d_match_idx)): ## idx of the matched 3D line 
-        if line_2d_match_idx[i] != None:
             line_2d_match_idx[i] = line_2d_match_idx[i]+len(scene_line_3d_params)
     scene_line_2d_match_idx[basename] = np.array(line_2d_match_idx)
     #
@@ -324,7 +322,6 @@ for i in range(0,len(depth_img_list)):
 np.save(line_data_folder+scene_id+f"_results_raw.npy", {
     "scene_pose": scene_pose,
     "scene_intrinsic": scene_intrinsic,
-    "obj_id_label_id": obj_id_label_id,
     "label_2_semantic_dict": new_label_2_semantic_dict,
     #
     "scene_line_2d_points": scene_line_2d_points,
