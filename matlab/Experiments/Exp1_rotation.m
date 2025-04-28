@@ -8,56 +8,51 @@
 %%% Version: 1.0
 %%% License: MIT
 %%%%
-%%
+
 clear;
 clc;
-% candidate saturation functions
-kernel_0 = @(x) 1;             % choose this kernel for regular consensus maximization
-kernel_1 = @(x) exp(-x+1);
-kernel_2 = @(x) x^-2;
-kernel_3 = @(x) x^-8;
-kernel_4 = @(x) 2^(-x+1)/x;
-kernel_5 = @(x) 1/factorial(x);
-kernel_6 = @(x) 2^(-x+1);
-kernel_7 = @(x) 2/x/(x+1);
-%%
 dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
 dataset_idx = dataset_ids(2);
-output_filename= "matlab/Experiments/record/"+dataset_idx+"_rotation_record.mat";
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
-numRows=11000;
+
+%%% statistics
+total_img=1000;
+large_err_num_axis = zeros(total_img,5);
 column_names=...
     ["image id","time","orient err","# 2D lines with match","score","score under gt","# candidates"];
 columnTypes =...
     ["int32","double","double","int32","double","double","int32"];
-Record_SCM_FGO_clustered     =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_SCM_FGO_unclustered   =table('Size', [numRows, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_clustered     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_unclustered   =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+%%
 %%%  params
-kernel = kernel_3;
+kernel = @(x) x^-8;
 trunc_num=100;
 kernel_buffer=zeros(trunc_num,1);
 for i=1:trunc_num
     kernel_buffer(i)=kernel(i);
 end
-line_num_thres=20; % minimal number of 2D lines required in the image
-total_picture=100; 
-% rotation bnb
+line_num_thres=15; % minimal number of 2D lines required in the image
+%%% rotation bnb
 verbose_flag=0; % verbose mode for BnB
 mex_flag=1; % use matlab mex code for acceleration
 branch_reso = pi/512; % terminate bnb when branch size <= branch_reso
-sample_reso = pi/256; % resolution for interval analysis
-total=2000;
-large_err_num_axis = zeros(total,4);
-parfor num =1:total
-    % num
+sample_reso = pi/512; % resolution for interval analysis
+% paramaters for handling unbiguity of the global optimum
+% basically we keep all the candidates which 
+% (a) have the same score after rounding (b) not proximate to each other
+round_digit = 9;
+prox_thres = cosd(5);
+for num =0:total_img
+    img_idx=num*10;
     %%% read 2D line data of cur image
-    frame_id = sprintf("%06d",num*10);
+    frame_id = sprintf("%06d",img_idx);
     if ~exist(data_folder+"lines2d\frame_"+frame_id+"2dlines.csv",'file')
         continue
     end
-    % lines2D(Nx10): 
-    % normal vector(3x1), semantic label(1), projection error(orient,trans), endpoint a(u,v), endpoint b(u,v) 
+    img_idx
+    % lines2D(Nx10): normal vector(3x1), semantic label(1), projection error(orient,trans), endpoint a(u,v), endpoint b(u,v) 
     lines2D = readmatrix(data_folder+"lines2d\frame_"+frame_id+"2dlines.csv"); 
     lines2D = lines2D(lines2D(:,4)~=0,:); % delete 2D line without a semantic label
     if length(lines2D)<line_num_thres
@@ -81,7 +76,7 @@ parfor num =1:total
     %%%%%%%%%%%%%%%%%%% Estimate Orientation %%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % set threshold
-    epsilon_r=max(lines2D(:,6)*1.1);
+    epsilon_r=max(lines2D(:,6))*1.05;
     %
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
     gt_inliers_id = id_cluster(gt_inliers_idx);
@@ -89,22 +84,24 @@ parfor num =1:total
     num_2D_line_match=length(unique(gt_inliers_id));
     % Sat_FGO_clustered
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag);
+        Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer,...
+        branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
     if min_err > 160
-        Delta_R=R_opt'*R_gt;
+        Delta_R=R_gt*R_opt';
         err_axis = rotmat2vec3d(Delta_R);
-        large_err_num_axis(num,:) = [num*10,err_axis/norm(err_axis)];
+        large_err_num_axis(num+1,:) = [img_idx,min_err,err_axis/norm(err_axis)];
     end
     est_inliers_idx=find(abs(dot(R_opt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
     est_inliers_id = id_cluster(est_inliers_idx);
-    Record_SCM_FGO_clustered(num+1,:)={num*10,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
+    Record_SCM_FGO_clustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
     % Sat_FGO_unclustered
 end
 large_err_num_axis(large_err_num_axis(:,2)==0,:)=[];
 Record_SCM_FGO_clustered(Record_SCM_FGO_clustered.("score")==0,:)=[];
-% save(output_filename,"Record_CM_EGO","Record_CM_FGO","Record_SCM_FGO_unclustered","Record_SCM_EGO_clustered", ...
-%                             "Record_SCM_FGO_clustered","sampleSize","sample_resolution","epsilon_r","branch_resolution");
+%%
+output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+save(output_filename,"Record_SCM_FGO_clustered","large_err_num_axis");
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
