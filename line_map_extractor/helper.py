@@ -16,7 +16,7 @@ params_2d = {
     "thread_number": 32,                                 
     # for 2d line extractor
     "sigma": 1,
-    "gradientThreshold": 20,
+    "gradientThreshold": 45,                 # tune this to filter weak 2D lines
     "minLineLen": 150,                       # tune this to filer short 2D lines            
     "lineFitErrThreshold": 0.2,
     "pxToSegmentDistTh": 1.5,
@@ -24,7 +24,7 @@ params_2d = {
     "validate": True,
     "treatJunctions": True,
     # for 2d line merging
-    "pix_dis_thresh": 10,                    # tune this to filter nearby 2D lines
+    "pix_dis_thresh": 20,                    # tune this to filter nearby 2D lines
     "parallel_thres_2d": np.cos(3*np.pi/180), 
     # for 3d line regression
     "background_depth_diff_thresh": 0.3,     # tune this to threshold the depth leap between fore- and back-ground points 
@@ -41,7 +41,7 @@ params_3d = {
     "parrallel_thresh_3d":np.cos(2.5*np.pi/180), # tune this
     "overlap_thresh_3d": 0.025,                  # tune this
     # for 3d line pruning
-    "degree_threshold": 2,                       # tune this
+    "degree_threshold": 1,                       # tune this
 }
 
 def get_line_eq(x0, y0, x1, y1):
@@ -107,6 +107,12 @@ def extract_and_prune_2dlines(rgb):
 def get_foreground_points(valid_z):
     # Perform KMeans clustering for depth to distinguish fore- and back-ground
     kmeans = KMeans(n_clusters=2, random_state=0).fit(valid_z.reshape(-1, 1))
+    actual_clusters = len(np.unique(kmeans.labels_))
+    # special case
+    if actual_clusters == 1:
+        # there is only one depth cluster 
+        return list(range(0, len(valid_z))), np.mean(valid_z), False
+    # 
     depth_cluster_0 = valid_z[np.where(kmeans.labels_ == 0)]
     depth_cluster_1 = valid_z[np.where(kmeans.labels_ == 1)]
     foreground_idx = range(0, len(valid_z))

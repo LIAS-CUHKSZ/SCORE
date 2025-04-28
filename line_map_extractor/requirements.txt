@@ -1,3 +1,4 @@
 joblib
 setuptools
+tqdm
 git+https://github.com/iago-suarez/ELSED.git

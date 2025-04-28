@@ -22,6 +22,7 @@ import glob
 import os
 import json
 import open3d as o3d
+from tqdm import tqdm
 from skimage.measure import LineModelND, ransac
 # from collections import Counter
 from joblib import Parallel, delayed
@@ -35,7 +36,7 @@ rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
 depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
 rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
-depth_img_list= depth_img_list[::4] #downsample
+depth_img_list= depth_img_list[::3] #downsample
 # remove the depth images that do not have corresponding rgb images
 k = 0
 while(k<len(depth_img_list)):
@@ -130,7 +131,7 @@ scene_line_3d_params = []
 scene_line_3d_end_points = []
 scene_line_3d_image_source = []
 ### function for processing a single image     
-def process_file(i, depth_img_name):
+def process_file(depth_img_name):
     basename = os.path.basename(depth_img_name).split(".")[0]
     intrinsic = pose_data[basename]["intrinsic"]
     pose_matrix = np.array(pose_data[basename]["aligned_pose"])
@@ -199,7 +200,7 @@ def process_file(i, depth_img_name):
             else:
                 break
         if depth_mean[best_one]==255:
-            print("Failure: no depth info for this 2d line")
+            # print("Failure: no depth info for this 2d line")
             error_rot   = -1
             error_trans = -1
             continue
@@ -285,14 +286,15 @@ def process_file(i, depth_img_name):
     cv2.imwrite(os.path.join(line_image_folder, f"{basename}.jpg"), rgb_color)    
     return (basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t)
 results=[]
-## unparalled code to process files
-# for i, depth_img_name in enumerate(depth_img_list):
-#     if i > -1:
-#         result = process_file(i,depth_img_name)
-#         results.append(result)
+# unparalled code to process files
+for depth_img_name  in tqdm(depth_img_list):
+        result = process_file(depth_img_name)
+        results.append(result)
 
-### parallel code to process files
-results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(i, depth_img_name) for i, depth_img_name in enumerate(depth_img_list))
+## parallel code to process files
+# results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(i, depth_img_name) for i, depth_img_name in enumerate(depth_img_list))
+
+# 
 for result in results:
     basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t = result
     #
