@@ -21,6 +21,9 @@
 %%%%
 
 function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,verbose_flag,mex_flag)
+%%% paramaters for handling unbiguity of the global optimum
+rounding_digit = 9;
+proximity_thres = cosd(5);
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
@@ -67,8 +70,8 @@ while true
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end
     end
-    new_upper=round(new_upper,2);
-    new_lower=round(new_lower,2);
+    new_upper=round(new_upper,rounding_digit);
+    new_lower=round(new_lower,rounding_digit);
     branch=[branch,[new_branch;new_upper;new_lower]];
     % branch_t=branch';
     for i=1:4
@@ -79,7 +82,7 @@ while true
             theta_best = new_theta_lower(i);
         elseif new_lower(i)==best_lower
             u_new=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)),0.5*(new_branch(2,i)+new_branch(4,i)));
-            if max(u_new'*u_best)<cosd(3) % the new axis is not proximate to cur axises
+            if max(u_new'*u_best)<proximity_thres % the new axis is not proximate to cur axises
                 r_branch=[r_branch,new_branch(1:4,i)];
                 theta_best = [theta_best,new_theta_lower(i)];
                 u_best = [u_best,u_new];
