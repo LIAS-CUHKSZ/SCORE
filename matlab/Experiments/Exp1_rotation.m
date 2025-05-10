@@ -18,13 +18,17 @@ load(data_folder+"lines3D.mat");
 
 %%% statistics
 total_img=1000;
-large_err_num_axis = zeros(total_img,5);
 column_names=...
     ["image id","time","orient err","# 2D lines with match","score","score under gt","# candidates"];
 columnTypes =...
     ["int32","double","double","int32","double","double","int32"];
 Record_SCM_FGO_clustered     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_SCM_FGO_unclustered   =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+%
+column_names2=...
+    ["image id","orient err","score","score under gt","gt_x","gt_y","gt_z","pert_x","pert_y","pert_z"];
+columnTypes2 =...
+    ["int32","double","double","double","double","double","double","double","double","double"];
+Largerr_SCM_FGO_clustered     =table('Size', [total_img, length(column_names2)],'VariableTypes', columnTypes2,'VariableNames', column_names2);
 %%
 %%%  params
 kernel = @(x) x^-8;
@@ -44,7 +48,7 @@ sample_reso = pi/512; % resolution for interval analysis
 % (a) have the same score after rounding (b) not proximate to each other
 round_digit = 9;
 prox_thres = cosd(5);
-for num =0:total_img
+for num =70:total_img
     img_idx=num*10;
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
@@ -66,7 +70,7 @@ for num =0:total_img
     lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
-    [n_2D,v_3D,id]=match_line(lines2D,lines3D); 
+    [n_2D,v_3D,id,~]=match_line(lines2D,lines3D); 
     % fprintf("# match with all 3D lines:       %d\n",length(id));
     
     % match with clustered 3D lines 
@@ -79,6 +83,7 @@ for num =0:total_img
     epsilon_r=max(lines2D(:,6))*1.05;
     %
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
+
     gt_inliers_id = id_cluster(gt_inliers_idx);
     gt_score = calculate_score(gt_inliers_id,kernel_buffer);
     num_2D_line_match=length(unique(gt_inliers_id));
@@ -87,21 +92,56 @@ for num =0:total_img
         Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer,...
         branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
-    if min_err > 160
-        Delta_R=R_gt*R_opt';
-        err_axis = rotmat2vec3d(Delta_R);
-        large_err_num_axis(num+1,:) = [img_idx,min_err,err_axis/norm(err_axis)];
-    end
     est_inliers_idx=find(abs(dot(R_opt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
     est_inliers_id = id_cluster(est_inliers_idx);
     Record_SCM_FGO_clustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
-    % Sat_FGO_unclustered
+    if min_err > 160
+        Delta_R=R_opt*R_gt';
+        gt_rotv = rotmat2vec3d(R_gt);
+        err_rotv = rotmat2vec3d(Delta_R);
+        Largerr_SCM_FGO_clustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
+            gt_rotv(1),gt_rotv(2),gt_rotv(3),err_rotv(1),err_rotv(2),err_rotv(3)};
+    end
 end
-large_err_num_axis(large_err_num_axis(:,2)==0,:)=[];
+Largerr_SCM_FGO_clustered(Largerr_SCM_FGO_clustered.("score")==0,:)=[];
 Record_SCM_FGO_clustered(Record_SCM_FGO_clustered.("score")==0,:)=[];
-%%
 output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
-save(output_filename,"Record_SCM_FGO_clustered","large_err_num_axis");
+save(output_filename,"Record_SCM_FGO_clustered","Largerr_SCM_FGO_clustered");
+%%
+
+N_large_err=height(Largerr_SCM_FGO_clustered);
+sz=5; scale=1;
+for n=1:N_large_err
+    fprintf("image idx:%d, max score:%f, score under gt:%f",Largerr_SCM_FGO_clustered.("image id")(n),Largerr_SCM_FGO_clustered.("score")(n),Largerr_SCM_FGO_clustered.("score under gt")(n));
+    fprintf("\n");
+    % plot the gt camera orientation
+    rot_gt_v = Largerr_SCM_FGO_clustered{n,5:7};
+    R_gt = rotvec2mat3d(rot_gt_v);
+    T_gt = [R_gt,zeros(3,1);0,0,0,1];
+    draw_pose(T_gt,sz,scale);
+    hold on
+    % plot the estimated camera orientation
+    rot_pert_v = Largerr_SCM_FGO_clustered{n,8:10};
+    R_pert = rotvec2mat3d(rot_pert_v);
+    R_est = R_pert*R_gt;
+    T_est = [R_est,ones(3,1);0,0,0,1];
+    draw_pose(T_est,sz,scale);
+    hold off
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
