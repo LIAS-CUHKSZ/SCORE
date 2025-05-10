@@ -38,10 +38,10 @@ params_3d = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3d line merging
-    "parrallel_thresh_3d":np.cos(2.5*np.pi/180), # tune this
-    "overlap_thresh_3d": 0.025,                  # tune this
+    "parrallel_thresh_3d":np.cos(1.5*np.pi/180), # tune this
+    "overlap_thresh_3d": 0.015,                  # tune this
     # for 3d line pruning
-    "degree_threshold": 1,                       # tune this
+    "degree_threshold": 0,                       # tune this
 }
 
 def get_line_eq(x0, y0, x1, y1):
@@ -89,14 +89,15 @@ def extract_and_prune_2dlines(rgb):
                 project_dis = np.linalg.norm(project_diff, axis=0)
                 proximate_line_flag = min(project_dis) < params_2d["pix_dis_thresh"]
                 sig_dim = np.argmax(abs(vj))
-                if sig_dim == 0:
-                    proximate_line_flag = proximate_line_flag and not (x3 > x2 or x4 < x1)
-                else:
-                    proximate_line_flag = proximate_line_flag and not (min(y3, y4) > max(y1, y2) or max(y3, y4) < min(y1, y2))
+                # uncomment this if you want to keep disconnected segments on a same line
+                # if sig_dim == 0:
+                #     proximate_line_flag = proximate_line_flag and not (x3 > x2 or x4 < x1)
+                # else:
+                #     proximate_line_flag = proximate_line_flag and not (min(y3, y4) > max(y1, y2) or max(y3, y4) < min(y1, y2))
                 if proximate_line_flag:  # proximate parallel lines
                     segments = np.delete(segments, k, 0)
                     scores = np.delete(scores, k, 0)
-                else:  # disconnected segments on a same line
+                else:  
                     k += 1
             else:
                 k += 1

@@ -36,8 +36,7 @@ for i in range(0,len(scene_list)):
     # 
     scene_line_2d_params = data['scene_line_2d_params']
     scene_line_2d_semantic_labels = data['scene_line_2d_semantic_labels']
-    scene_projection_error_r = data['scene_projection_error_r']
-    scene_projection_error_t = data['scene_projection_error_t']
+    scene_line_2d_match_idx_updated = data['scene_line_2d_match_idx_updated']
     line_2d_points = data['scene_line_2d_end_points']
 
     ### save path
@@ -65,19 +64,15 @@ for i in range(0,len(scene_list)):
         df_pose.to_csv(pose_folder+frame_name+'.csv', index=False) 
         df_intrinsic = pd.DataFrame(intrinsic_vec, columns=['fx','cx','fy','cy'])
         df_intrinsic.to_csv(intrinsic_folder+frame_name+'.csv', index=False)  
-        # store the 2D line information for the cur image
-        proj_error_r = scene_projection_error_r[frame_name]
-        proj_error_t = scene_projection_error_t[frame_name]
-        lines_2d_thisframe = np.empty([num_lines,10],dtype=float) # used to store 2D line paramaters
+        lines_2d_thisframe = np.empty([num_lines,9],dtype=float) # used to store 2D line paramaters
         for j in range(0,num_lines):
-            # normal vector(3x1), semantic label(1), projection error(2x1), endpoint a(2x1), endpoint b(2x1) 
+            # normal vector(3x1), semantic label(1), endpoint a(2x1), endpoint b(2x1), matched 3D line index(1)
             lines_2d_thisframe[j][0:3] = scene_line_2d_params[frame_name][j]
             lines_2d_thisframe[j][3] = frame_semantics_label[j]
-            lines_2d_thisframe[j][4] = proj_error_r[j]
-            lines_2d_thisframe[j][5] = proj_error_t[j]
-            lines_2d_thisframe[j][6:8] = line_2d_points[frame_name][j][0]
-            lines_2d_thisframe[j][8:10] = line_2d_points[frame_name][j][1]
-        df_2d = pd.DataFrame(lines_2d_thisframe, columns=['A','B','C','semantic_label','proj_error_r','proj_error_t','ua','va','ub','vb'])
+            lines_2d_thisframe[j][4:6] = line_2d_points[frame_name][j][0]
+            lines_2d_thisframe[j][6:8] = line_2d_points[frame_name][j][1]
+            lines_2d_thisframe[j][8] = scene_line_2d_match_idx_updated[frame_name][j]
+        df_2d = pd.DataFrame(lines_2d_thisframe, columns=['A','B','C','semantic_label','ua','va','ub','vb','matched_3d_line_idx'])
         df_2d.to_csv(line2d_folder+frame_name+'2dlines.csv', index=False)
         print(frame_name+'data processed')
 
