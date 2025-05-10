@@ -56,7 +56,7 @@ for num =70:total_img
         continue
     end
     img_idx
-    % lines2D(Nx10): normal vector(3x1), semantic label(1), projection error(orient,trans), endpoint a(u,v), endpoint b(u,v) 
+    % lines2D(Nx9): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1) 
     lines2D = readmatrix(data_folder+"lines2d\frame_"+frame_id+"2dlines.csv"); 
     lines2D = lines2D(lines2D(:,4)~=0,:); % delete 2D line without a semantic label
     if length(lines2D)<line_num_thres
@@ -68,22 +68,42 @@ for num =70:total_img
     R_gt = T_gt(1:3,1:3); t_gt=T_gt(1:3,4);
     lines2D(:,1:3)=lines2D(:,1:3)*K; 
     lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
+    %%% check ambiguity
+    M = length(lines2D);
+    n_2D_gt = zeros(M,3);
+    v_3D_gt = zeros(M,3);
+    residual_r = zeros(M,1);
+    for i=1:M
+        matched_idx = int32(lines2D(i,end))+1;
+        n = lines2D(i,1:3);
+        n_2D_gt(i,:)=n;
+        v = lines3D(matched_idx,4:6);
+        v_3D_gt(i,:)=v;
+        residual_r(i)=abs((R_gt*n')'*v');
+    end
+    id_gt = 1:M;
+    kernel_buffer_gt = zeros(trunc_num,1);
+    kernel_buffer_gt(1)=1;
+    epsilon_r = max(residual_r)*1.2;
+    [R_opt_top,best_score,num_candidate,time,~,~] = ...
+        Sat_RotFGO(n_2D_gt,v_3D_gt,id_gt',kernel_buffer_gt,...
+        branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
+    [min_err_gt,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
     [n_2D,v_3D,id,~]=match_line(lines2D,lines3D); 
     % fprintf("# match with all 3D lines:       %d\n",length(id));
     
     % match with clustered 3D lines 
-    [n_2D_cluster,v_3D_cluster,id_cluster]=match_line(lines2D,lines3D_cluster);
+    [n_2D_cluster,v_3D_cluster,id_cluster,~]=match_line(lines2D,lines3D_cluster);
     % fprintf("# match with clustered 3D lines: %d\n",length(id_cluster)); 
 
     %%%%%%%%%%%%%%%%%%% Estimate Orientation %%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % set threshold
-    epsilon_r=max(lines2D(:,6))*1.05;
+    epsilon_r= max(residual_r)*1.2;
     %
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
-
     gt_inliers_id = id_cluster(gt_inliers_idx);
     gt_score = calculate_score(gt_inliers_id,kernel_buffer);
     num_2D_line_match=length(unique(gt_inliers_id));

@@ -1,4 +1,4 @@
-%%%%
+
 % Cluster parallel 3D lines.
 % Save 3D line data as .mat file.
 
