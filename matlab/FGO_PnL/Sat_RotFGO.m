@@ -53,9 +53,9 @@ end
 u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS 
 % select the next exploring branch according to the upper bounds
 best_upper = max(upper_east,upper_west);
-ind_upper = 2-(upper_east>upper_west);
-next_branch=branch(1:4,ind_upper);
-branch(:,ind_upper)=[];
+idx_upper = 2-(upper_east>upper_west);
+next_branch=branch(1:4,idx_upper);
+branch(:,idx_upper)=[];
 % record bounds history
 upper_record=best_upper; lower_record=best_lower;
 %%% start BnB
@@ -103,11 +103,15 @@ while true
     end
     upper_record=[upper_record;best_upper];
     lower_record=[lower_record;best_lower];
-    [best_upper,ind_upper]=max(branch(5,:));
-    next_branch=branch(1:4,ind_upper);
-    branch(:,ind_upper)=[];
+    best_upper = max(branch(5,:));
+    idx_upper = find(branch(5,:)==best_upper);
+    branch_size=branch(3,idx_upper)-branch(1,idx_upper);
+    [~,temp_idx]=max(branch_size);
+    idx_upper=idx_upper(temp_idx);
+    next_branch=branch(1:4,idx_upper);
+    branch(:,idx_upper)=[];
     branch(:,branch(5,:)<best_lower)=[];
-    if (  (new_branch(3,1) - new_branch(1,1)) < branch_reso )
+    if (  (next_branch(3,1) - next_branch(1,1)) < branch_reso )
         break;
     end
     iter=iter+1;

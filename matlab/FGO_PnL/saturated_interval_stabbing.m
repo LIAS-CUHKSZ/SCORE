@@ -27,7 +27,9 @@ function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals
         if ~masks(sidx(i)) % start of an interval
             temp = ids((sidx(i)+1)/2);
             count_buffer(temp)=count_buffer(temp)+1;
-            sat_count = sat_count + kernel_buff(min(count_buffer(temp),trunc_num));
+            if count_buffer(temp)<=trunc_num
+                sat_count = sat_count + kernel_buff(count_buffer(temp));
+            end
             if sat_count > saturated_num_stabbed                   
                saturated_num_stabbed = sat_count;
                stabber = Intervals(sidx(i))+1e-12;
@@ -36,7 +38,9 @@ function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals
             end            
         else % end of an interval
             temp = ids(sidx(i)/2);
-            sat_count = sat_count - kernel_buff(min(count_buffer(temp),trunc_num));
+            if count_buffer(temp)<=trunc_num
+                sat_count = sat_count - kernel_buff(count_buffer(temp));
+            end
             count_buffer(temp)=count_buffer(temp)-1;
         end       
     end

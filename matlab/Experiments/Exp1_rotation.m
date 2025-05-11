@@ -17,7 +17,7 @@ data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 
 %%% statistics
-total_img=300;
+total_img=100;
 column_names=...
     ["image id","time","orient err","# 2D lines with match","score","score under gt","# candidates"];
 columnTypes =...
@@ -33,9 +33,9 @@ Largerr_SCM_FGO_unclustered     =table('Size', [total_img, length(column_names2)
 Largerr_SCM_FGO_clustered     =table('Size', [total_img, length(column_names2)],'VariableTypes', columnTypes2,'VariableNames', column_names2);
 %%
 %%%  params
-kernel_sat = @(x) x^-8;
 kernel_trunc = @(x) 1-(x>1);
-trunc_num=100;
+kernel_sat = @(x) x^-9;
+trunc_num=2;
 kernel_buffer_trunc=zeros(trunc_num,1);
 for i=1:trunc_num
     kernel_buffer_trunc(i)=kernel_trunc(i);
@@ -44,7 +44,6 @@ kernel_buffer_sat=zeros(trunc_num,1);
 for i=1:trunc_num
     kernel_buffer_sat(i)=kernel_sat(i);
 end
-
 line_num_thres=10; % minimal number of 2D lines required in the image
 %%% rotation bnb
 verbose_flag=0; % verbose mode for BnB
