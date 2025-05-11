@@ -18,12 +18,11 @@
 
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%           Xiang Zheng   <224045013@link.cuhk.edu.cn>
-%%% Version: 1.2
+%%% Version: 1.0
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag)
+function [found_flag] = Find_Rot_Ambiguous(vector_n,vector_v,branch_reso,epsilon_r,sample_reso,R_gt,threshold)
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
@@ -32,25 +31,19 @@ tic
 % calculate bounds for east and west semispheres.
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
-if mex_flag
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
-else
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
-end
+theta_0=zeros(2,1);
+id=1:length(vector_n); id=id';
+kernel_buffer = zeros(trunc_num,1); kernel_buffer(1)=1;
+[upper_east,lower_east,theta_0(1)]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+[upper_west,lower_west,theta_0(2)]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
 branch=[branch,[B_east;upper_east;lower_east]];
 branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
-if lower_east>=lower_west
-   theta_best = cluster_stabber(theta_east);
-   u_best=polar_2_xyz(0.5*(B_east(1)+B_east(3)),0.5*(B_east(2)+B_east(4)));
-else
-   theta_best = cluster_stabber(theta_west);
-   u_best=polar_2_xyz(0.5*(B_west(1)+B_west(3)),0.5*(B_west(2)+B_west(4)));
-end
-u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS 
+ind_lower = 2-(lower_east>lower_west);
+theta_best = theta_0(ind_lower);
+r_branch=branch(1:4,ind_lower);
+u_best=polar_2_xyz(0.5*(r_branch(1)+r_branch(3)),0.5*(r_branch(2)+r_branch(4)));
 % select the next exploring branch according to the upper bounds
 best_upper = max(upper_east,upper_west);
 ind_upper = 2-(upper_east>upper_west);
@@ -59,16 +52,15 @@ branch(:,ind_upper)=[];
 % record bounds history
 upper_record=best_upper; lower_record=best_lower;
 %%% start BnB
-new_upper=zeros(1,4); new_lower=zeros(1,4); 
-new_theta_lower=cell(1,4); % it is possible that multiple optimal stabbers returned by Sat-IS
+new_upper=zeros(1,4); new_lower=zeros(1,4); new_theta_lower=zeros(1,4);
 iter=1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
         if mex_flag
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO_mex(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
+            [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO_mex(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
         else
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
+            [new_upper(i),new_lower(i),new_theta_lower(i)]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
         end
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
@@ -81,21 +73,14 @@ while true
     for i=1:4
         if  new_lower(i)>best_lower
             best_lower=new_lower(i);
+            r_branch=new_branch(1:4,i);
             u_best=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)) , 0.5*(new_branch(2,i)+new_branch(4,i)) );
-            theta_best = cluster_stabber(new_theta_lower{i});
-            % if length(theta_best)>1
-            %     theta_best
-            % end
-            u_best=repmat(u_best,1,length(theta_best));
+            theta_best = new_theta_lower(i);
         elseif new_lower(i)==best_lower
             u_new=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)),0.5*(new_branch(2,i)+new_branch(4,i)));
             if max(u_new'*u_best)<prox_thres % the new axis is not proximate to cur axises
-                new_best_theta = cluster_stabber(new_theta_lower{i});
-                % if length(new_best_theta)>1
-                %     new_best_theta
-                % end
-                theta_best = [theta_best,new_best_theta];
-                u_new = repmat(u_new,1,length(new_best_theta));
+                r_branch=[r_branch,new_branch(1:4,i)];
+                theta_best = [theta_best,new_theta_lower(i)];
                 u_best = [u_best,u_new];
             end
         else
@@ -112,36 +97,8 @@ while true
     end
     iter=iter+1;
 end
-%%% output
-num_candidate=size(u_best,2);
-R_opt=[];
-for i=1:num_candidate
-    R_opt = [R_opt;rotation_from_axis_angle(u_best(:,i), theta_best(i))];
-end
-time=toc;
 end
 
-%%%%%%%%%%%%%%%%%%%%% subfunctions %%%%%%%%%%%%%%%%%%%%%%
-function stabber_clustered=cluster_stabber(stabbers)
-    thres = 10*pi/180;
-    if isscalar(stabbers)
-        stabber_clustered=stabbers;
-        return
-    end
-    stabber_clustered=[];
-    N = length(stabbers);
-    stabber_buffer=stabbers(1);
-    for n=2:N
-        new_stabber=stabbers(n);
-        if new_stabber-stabber_buffer(1)>thres
-            stabber_clustered=[stabber_clustered,mean(stabber_buffer)];
-            stabber_buffer=new_stabber;
-        else
-            stabber_buffer=[stabber_buffer,new_stabber];
-        end
-    end
-    stabber_clustered=[stabber_clustered,mean(stabber_buffer)];
-end
 
 function out=subBranch(branch)
 % divide the input 2D cube into four subcubes

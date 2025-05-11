@@ -33,10 +33,12 @@ for i = 1:N
     intervals_lower=[intervals_lower;tmp_interval];
     ids_lower = [ids_lower;id(i)*ones(length(tmp_interval)/2,1)];
 end
-
-% 
-[Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buffer);
-
+if isempty(ids_lower)
+    Q_lower = 0;
+    theta_lower = 0;
+else
+    [Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buffer);
+end
 %%% calculate upper bound based on rigoros interval anlaysis
 % obtain the interval for each matched pair
 % calculate the extreme values for the h1 and h2 function
@@ -51,7 +53,11 @@ for i = 1:N
     ids_upper = [ids_upper;id(i)*ones(length(tmp_interval)/2,1)];
 end
 %
-[Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buffer);
+if isempty(ids_upper)
+    Q_upper = 0;
+else
+    [Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buffer);
+end
 end
 
 %%%

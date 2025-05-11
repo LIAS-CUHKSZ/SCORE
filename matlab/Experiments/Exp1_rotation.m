@@ -17,27 +17,35 @@ data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 
 %%% statistics
-total_img=1000;
+total_img=300;
 column_names=...
     ["image id","time","orient err","# 2D lines with match","score","score under gt","# candidates"];
 columnTypes =...
     ["int32","double","double","int32","double","double","int32"];
 Record_SCM_FGO_clustered     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_unclustered     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 %
 column_names2=...
     ["image id","orient err","score","score under gt","gt_x","gt_y","gt_z","pert_x","pert_y","pert_z"];
 columnTypes2 =...
     ["int32","double","double","double","double","double","double","double","double","double"];
+Largerr_SCM_FGO_unclustered     =table('Size', [total_img, length(column_names2)],'VariableTypes', columnTypes2,'VariableNames', column_names2);
 Largerr_SCM_FGO_clustered     =table('Size', [total_img, length(column_names2)],'VariableTypes', columnTypes2,'VariableNames', column_names2);
 %%
 %%%  params
-kernel = @(x) x^-8;
+kernel_sat = @(x) x^-8;
+kernel_trunc = @(x) 1-(x>1);
 trunc_num=100;
-kernel_buffer=zeros(trunc_num,1);
+kernel_buffer_trunc=zeros(trunc_num,1);
 for i=1:trunc_num
-    kernel_buffer(i)=kernel(i);
+    kernel_buffer_trunc(i)=kernel_trunc(i);
 end
-line_num_thres=15; % minimal number of 2D lines required in the image
+kernel_buffer_sat=zeros(trunc_num,1);
+for i=1:trunc_num
+    kernel_buffer_sat(i)=kernel_sat(i);
+end
+
+line_num_thres=10; % minimal number of 2D lines required in the image
 %%% rotation bnb
 verbose_flag=0; % verbose mode for BnB
 mex_flag=1; % use matlab mex code for acceleration
@@ -48,20 +56,20 @@ sample_reso = pi/512; % resolution for interval analysis
 % (a) have the same score after rounding (b) not proximate to each other
 round_digit = 9;
 prox_thres = cosd(5);
-for num =70:total_img
+parfor num =0:total_img
     img_idx=num*10;
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
     if ~exist(data_folder+"lines2d\frame_"+frame_id+"2dlines.csv",'file')
         continue
     end
-    img_idx
     % lines2D(Nx9): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1) 
     lines2D = readmatrix(data_folder+"lines2d\frame_"+frame_id+"2dlines.csv"); 
     lines2D = lines2D(lines2D(:,4)~=0,:); % delete 2D line without a semantic label
     if length(lines2D)<line_num_thres
         continue
     end
+    img_idx
     K_p=readmatrix(data_folder+"intrinsics\frame_"+frame_id+".csv");
     K=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1];
     T_gt = readmatrix(data_folder+"poses\frame_"+frame_id+".csv");
@@ -82,13 +90,17 @@ for num =70:total_img
         residual_r(i)=abs((R_gt*n')'*v');
     end
     id_gt = 1:M;
-    kernel_buffer_gt = zeros(trunc_num,1);
-    kernel_buffer_gt(1)=1;
+    % set threshold
     epsilon_r = max(residual_r)*1.2;
-    [R_opt_top,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D_gt,v_3D_gt,id_gt',kernel_buffer_gt,...
-        branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
-    [min_err_gt,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
+    %
+    [R_opt_top,best_score_gt,num_candidate_gt,time_gt,~,~] = ...
+        Sat_RotFGO(n_2D_gt,v_3D_gt,id_gt',kernel_buffer_trunc,...
+        branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,0,mex_flag);
+    [max_err_gt,R_deviated_gt]=max_error(num_candidate_gt,R_opt_top,R_gt);
+    if max_err_gt>90
+        fprintf("ambigious setting, skip.");
+        continue
+    end
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
     [n_2D,v_3D,id,~]=match_line(lines2D,lines3D); 
@@ -100,16 +112,37 @@ for num =70:total_img
 
     %%%%%%%%%%%%%%%%%%% Estimate Orientation %%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % %%%%%%%%%%%%%%%%%%% unclustered %%%%%%%%%%%%%%%%%%%%
+    % gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
+    % gt_inliers_id = id(gt_inliers_idx);
+    % gt_score = calculate_score(gt_inliers_id,kernel_buffer);
+    % num_2D_line_match=length(unique(gt_inliers_id));
+    % % Sat_FGO_unclustered
+    % [R_opt_top,best_score,num_candidate,time,~,~] = ...
+    %     Sat_RotFGO(n_2D,v_3D,id,kernel_buffer,...
+    %     branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
+    % [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
+    % est_inliers_idx=find(abs(dot(R_opt'*v_3D',n_2D'))<=epsilon_r);
+    % est_inliers_id = id(est_inliers_idx);
+    % Record_SCM_FGO_unclustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
+    % if min_err > 160
+    %     Delta_R=R_opt*R_gt';
+    %     gt_rotv = rotmat2vec3d(R_gt);
+    %     err_rotv = rotmat2vec3d(Delta_R);
+    %     Largerr_SCM_FGO_unclustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
+    %         gt_rotv(1),gt_rotv(2),gt_rotv(3),err_rotv(1),err_rotv(2),err_rotv(3)};
+    % end
+    %%%%%%%%%%%%%%%%%% clustered %%%%%%%%%%%%%%%%%%%%
     % set threshold
     epsilon_r= max(residual_r)*1.2;
     %
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
     gt_inliers_id = id_cluster(gt_inliers_idx);
-    gt_score = calculate_score(gt_inliers_id,kernel_buffer);
+    gt_score = calculate_score(gt_inliers_id,kernel_buffer_sat);
     num_2D_line_match=length(unique(gt_inliers_id));
     % Sat_FGO_clustered
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer,...
+        Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer_sat,...
         branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
     est_inliers_idx=find(abs(dot(R_opt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
@@ -173,10 +206,12 @@ function []=plot_bound_record(L_record,U_record)
 end
 
 function score=calculate_score(inlier_ids,kernel_buffer)
+    trunc_num = length(kernel_buffer);
     score=0;
     unique_ids=unique(inlier_ids);
     for i=1:length(unique_ids)
         num = sum(inlier_ids==unique_ids(i));
+        num = min(num,trunc_num);
         for j=1:num
             score=score+kernel_buffer(j);
         end
