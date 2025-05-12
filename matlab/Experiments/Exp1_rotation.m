@@ -34,8 +34,8 @@ Largerr_SCM_FGO_clustered     =table('Size', [total_img, length(column_names2)],
 %%
 %%%  params
 kernel_trunc = @(x) 1-(x>1);
-kernel_sat = @(x) x^-9;
-trunc_num=2;
+kernel_sat = @(x) x^-10;
+trunc_num=3;
 kernel_buffer_trunc=zeros(trunc_num,1);
 for i=1:trunc_num
     kernel_buffer_trunc(i)=kernel_trunc(i);
@@ -54,7 +54,7 @@ sample_reso = pi/512; % resolution for interval analysis
 % basically we keep all the candidates which 
 % (a) have the same score after rounding (b) not proximate to each other
 round_digit = 9;
-prox_thres = cosd(5);
+prox_thres = 3*pi/180;
 parfor num =0:total_img
     img_idx=num*10;
     %%% read 2D line data of cur image
@@ -68,7 +68,6 @@ parfor num =0:total_img
     if length(lines2D)<line_num_thres
         continue
     end
-    img_idx
     K_p=readmatrix(data_folder+"intrinsics\frame_"+frame_id+".csv");
     K=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1];
     T_gt = readmatrix(data_folder+"poses\frame_"+frame_id+".csv");
@@ -83,10 +82,9 @@ parfor num =0:total_img
     for i=1:M
         matched_idx = int32(lines2D(i,end))+1;
         n = lines2D(i,1:3);
-        n_2D_gt(i,:)=n;
         v = lines3D(matched_idx,4:6);
-        v_3D_gt(i,:)=v;
         residual_r(i)=abs((R_gt*n')'*v');
+        n_2D_gt(i,:)=n; v_3D_gt(i,:)=v';
     end
     id_gt = 1:M;
     % set threshold
@@ -96,8 +94,8 @@ parfor num =0:total_img
         Sat_RotFGO(n_2D_gt,v_3D_gt,id_gt',kernel_buffer_trunc,...
         branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,0,mex_flag);
     [max_err_gt,R_deviated_gt]=max_error(num_candidate_gt,R_opt_top,R_gt);
-    if max_err_gt>90
-        fprintf("ambigious setting, skip.");
+    if max_err_gt>30
+        fprintf("ambigious setting, skip.\n");
         continue
     end
     %%% match 2D and 3D lines using semnatic label
@@ -112,53 +110,58 @@ parfor num =0:total_img
     %%%%%%%%%%%%%%%%%%% Estimate Orientation %%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % %%%%%%%%%%%%%%%%%%% unclustered %%%%%%%%%%%%%%%%%%%%
-    % gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
-    % gt_inliers_id = id(gt_inliers_idx);
-    % gt_score = calculate_score(gt_inliers_id,kernel_buffer);
-    % num_2D_line_match=length(unique(gt_inliers_id));
-    % % Sat_FGO_unclustered
-    % [R_opt_top,best_score,num_candidate,time,~,~] = ...
-    %     Sat_RotFGO(n_2D,v_3D,id,kernel_buffer,...
-    %     branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
-    % [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
-    % est_inliers_idx=find(abs(dot(R_opt'*v_3D',n_2D'))<=epsilon_r);
-    % est_inliers_id = id(est_inliers_idx);
-    % Record_SCM_FGO_unclustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
-    % if min_err > 160
-    %     Delta_R=R_opt*R_gt';
-    %     gt_rotv = rotmat2vec3d(R_gt);
-    %     err_rotv = rotmat2vec3d(Delta_R);
-    %     Largerr_SCM_FGO_unclustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
-    %         gt_rotv(1),gt_rotv(2),gt_rotv(3),err_rotv(1),err_rotv(2),err_rotv(3)};
-    % end
-    %%%%%%%%%%%%%%%%%% clustered %%%%%%%%%%%%%%%%%%%%
-    % set threshold
-    epsilon_r= max(residual_r)*1.2;
-    %
-    gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
-    gt_inliers_id = id_cluster(gt_inliers_idx);
+    gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
+    gt_inliers_id = id(gt_inliers_idx);
     gt_score = calculate_score(gt_inliers_id,kernel_buffer_sat);
     num_2D_line_match=length(unique(gt_inliers_id));
-    % Sat_FGO_clustered
+    % Sat_FGO_unclustered
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer_sat,...
+        Sat_RotFGO(n_2D,v_3D,id,kernel_buffer_sat,...
         branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
     [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
-    est_inliers_idx=find(abs(dot(R_opt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
-    est_inliers_id = id_cluster(est_inliers_idx);
-    Record_SCM_FGO_clustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
-    if min_err > 160
+    est_inliers_idx=find(abs(dot(R_opt'*v_3D',n_2D'))<=epsilon_r);
+    est_inliers_id = id(est_inliers_idx);
+    Record_SCM_FGO_unclustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
+    if min_err > 30
+        gt_residual=abs(dot(R_opt'*v_3D_gt',n_2D_gt'));
+        fprintf("encouter large error, image idx:%d, err:%f, gt_residual:%f \n", img_idx,min_err,max(gt_residual))
         Delta_R=R_opt*R_gt';
         gt_rotv = rotmat2vec3d(R_gt);
         err_rotv = rotmat2vec3d(Delta_R);
-        Largerr_SCM_FGO_clustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
+        Largerr_SCM_FGO_unclustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
             gt_rotv(1),gt_rotv(2),gt_rotv(3),err_rotv(1),err_rotv(2),err_rotv(3)};
     end
+    %%%%%%%%%%%%%%%%%% clustered %%%%%%%%%%%%%%%%%%%%
+
+    % %
+    % gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
+    % gt_inliers_id = id_cluster(gt_inliers_idx);
+    % gt_score = calculate_score(gt_inliers_id,kernel_buffer_sat);
+    % num_2D_line_match=length(unique(gt_inliers_id));
+    % % Sat_FGO_clustered
+    % [R_opt_top,best_score,num_candidate,time,~,~] = ...
+    %     Sat_RotFGO(n_2D_cluster,v_3D_cluster,id_cluster,kernel_buffer_sat,...
+    %     branch_reso,epsilon_r,sample_reso,round_digit,prox_thres,verbose_flag,mex_flag);
+    % [min_err,R_opt]=min_error(num_candidate,R_opt_top,R_gt);
+    % est_inliers_idx=find(abs(dot(R_opt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
+    % est_inliers_id = id_cluster(est_inliers_idx);
+    % Record_SCM_FGO_clustered(num+1,:)={img_idx,time,min_err,num_2D_line_match,best_score,gt_score,num_candidate};
+    % if min_err > 30
+    %     gt_residual=abs(dot(R_opt'*v_3D_gt',n_2D_gt'));
+    %     fprintf("encouter large error, image idx:%d, err:%f, gt_residual:%f \n", img_idx,min_err,max(gt_residual))
+    %     Delta_R=R_opt*R_gt';
+    %     gt_rotv = rotmat2vec3d(R_gt);
+    %     err_rotv = rotmat2vec3d(Delta_R);
+    %     Largerr_SCM_FGO_clustered(num+1,:)={img_idx,min_err,best_score,gt_score,...
+    %         gt_rotv(1),gt_rotv(2),gt_rotv(3),err_rotv(1),err_rotv(2),err_rotv(3)};
+    % end
 end
 Largerr_SCM_FGO_clustered(Largerr_SCM_FGO_clustered.("score")==0,:)=[];
 Record_SCM_FGO_clustered(Record_SCM_FGO_clustered.("score")==0,:)=[];
-output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
-save(output_filename,"Record_SCM_FGO_clustered","Largerr_SCM_FGO_clustered");
+Largerr_SCM_FGO_unclustered(Largerr_SCM_FGO_clustered.("score")==0,:)=[];
+Record_SCM_FGO_unclustered(Record_SCM_FGO_clustered.("score")==0,:)=[];
+% output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+% save(output_filename,"Record_SCM_FGO_clustered","Largerr_SCM_FGO_clustered");
 %%
 
 N_large_err=height(Largerr_SCM_FGO_clustered);

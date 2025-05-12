@@ -44,10 +44,10 @@ branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
 if lower_east>=lower_west
-   theta_best = cluster_stabber(theta_east);
+   theta_best = cluster_stabber(theta_east,prox_thres);
    u_best=polar_2_xyz(0.5*(B_east(1)+B_east(3)),0.5*(B_east(2)+B_east(4)));
 else
-   theta_best = cluster_stabber(theta_west);
+   theta_best = cluster_stabber(theta_west,prox_thres);
    u_best=polar_2_xyz(0.5*(B_west(1)+B_west(3)),0.5*(B_west(2)+B_west(4)));
 end
 u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS 
@@ -82,21 +82,27 @@ while true
         if  new_lower(i)>best_lower
             best_lower=new_lower(i);
             u_best=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)) , 0.5*(new_branch(2,i)+new_branch(4,i)) );
-            theta_best = cluster_stabber(new_theta_lower{i});
-            % if length(theta_best)>1
-            %     theta_best
-            % end
+            theta_best = cluster_stabber(new_theta_lower{i},prox_thres);
             u_best=repmat(u_best,1,length(theta_best));
         elseif new_lower(i)==best_lower
             u_new=polar_2_xyz(0.5*(new_branch(1,i)+new_branch(3,i)),0.5*(new_branch(2,i)+new_branch(4,i)));
-            if max(u_new'*u_best)<prox_thres % the new axis is not proximate to cur axises
-                new_best_theta = cluster_stabber(new_theta_lower{i});
-                % if length(new_best_theta)>1
-                %     new_best_theta
-                % end
-                theta_best = [theta_best,new_best_theta];
-                u_new = repmat(u_new,1,length(new_best_theta));
-                u_best = [u_best,u_new];
+            new_best_theta = cluster_stabber(new_theta_lower{i},prox_thres);
+            % when achieve the same best score, store the new rotation if
+            % the difference with currently stored rotation is salient.
+            for j=1:length(new_best_theta)
+                R_new=rotvec2mat3d(u_new*new_best_theta(j));
+                prox_flag=0;
+                for k=1:length(theta_best)
+                    R_old=rotvec2mat3d(u_best(:,k)*theta_best(k));
+                    if angular_distance(R_new,R_old)*pi/180<=prox_thres
+                        prox_flag=1;
+                        break;
+                    end
+                end
+                if ~prox_flag
+                   theta_best = [theta_best,new_best_theta(j)];
+                   u_best = [u_best,u_new];
+                end
             end
         else
         end
@@ -126,8 +132,8 @@ time=toc;
 end
 
 %%%%%%%%%%%%%%%%%%%%% subfunctions %%%%%%%%%%%%%%%%%%%%%%
-function stabber_clustered=cluster_stabber(stabbers)
-    thres = 10*pi/180;
+function stabber_clustered=cluster_stabber(stabbers,prox_thres)
+    thres = prox_thres;
     if isscalar(stabbers)
         stabber_clustered=stabbers;
         return

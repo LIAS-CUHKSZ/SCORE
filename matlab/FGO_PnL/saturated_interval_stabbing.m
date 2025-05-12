@@ -23,7 +23,7 @@ function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals
     saturated_num_stabbed = 0; 
     stabber = [];
     count_buffer=zeros(max(ids),1);
-    for i = 1:length_sidx
+    for i = 1:length_sidx-1
         if ~masks(sidx(i)) % start of an interval
             temp = ids((sidx(i)+1)/2);
             count_buffer(temp)=count_buffer(temp)+1;
@@ -32,9 +32,9 @@ function [saturated_num_stabbed,stabber] = saturated_interval_stabbing(Intervals
             end
             if sat_count > saturated_num_stabbed                   
                saturated_num_stabbed = sat_count;
-               stabber = Intervals(sidx(i))+1e-12;
+               stabber = [Intervals(sidx(i))+1e-12,Intervals(sidx(i+1))-1e-12];
             elseif sat_count == saturated_num_stabbed
-               stabber = [stabber,Intervals(sidx(i))+1e-12]; 
+               stabber = [stabber,Intervals(sidx(i))+1e-12,Intervals(sidx(i+1))-1e-12]; 
             end            
         else % end of an interval
             temp = ids(sidx(i)/2);
