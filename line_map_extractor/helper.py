@@ -16,7 +16,7 @@ params_2d = {
     "thread_number": 32,                                 
     # for 2d line extractor
     "sigma": 1,
-    "gradientThreshold": 45,                 # tune this to filter weak 2D lines
+    "gradientThreshold": 35,                 # tune this to filter weak 2D lines
     "minLineLen": 150,                       # tune this to filer short 2D lines            
     "lineFitErrThreshold": 0.2,
     "pxToSegmentDistTh": 1.5,
@@ -27,10 +27,12 @@ params_2d = {
     "pix_dis_thresh": 20,                    # tune this to filter nearby 2D lines
     "parallel_thres_2d": np.cos(3*np.pi/180), 
     # for 3d line regression
-    "background_depth_diff_thresh": 0.3,     # tune this to threshold the depth leap between fore- and back-ground points 
+    "background_depth_diff_thresh": 0.2,     # tune this to threshold the depth leap between fore- and back-ground points 
     "line_points_num_thresh": 30,            # tune this to threshold the minimal number required to regress a reliable 3D line
-    "perturb_length": 16,                    # tune this to adjust the perturbation 
-     "num_hypo":8                            # tune this to adjust the hypothesis number
+    "perturb_length": 24,                    # tune this to adjust the perturbation 
+     "num_hypo":12,                            # tune this to adjust the hypothesis number
+    # wall and floor label
+    "background_labels": {8,18},
 }
 
 # parameters for line_extractor_pt2
@@ -41,8 +43,28 @@ params_3d = {
     "parrallel_thresh_3d":np.cos(1.5*np.pi/180), # tune this
     "overlap_thresh_3d": 0.015,                  # tune this
     # for 3d line pruning
-    "degree_threshold": 0,                       # tune this
+    "degree_threshold": 1,                       # tune this
 }
+
+def extract_dominant_label(y,x,obj_ids,obj_id_label_id,label_remapped):
+    ### get the (dominant) semantic label for this 2d line
+    all_points_obj_ids = obj_ids[y, x]
+    all_points_semantic_label = []
+    for point_obj_id in all_points_obj_ids:
+        all_points_semantic_label.append(obj_id_label_id[point_obj_id])
+    all_points_semantic_label = np.array(all_points_semantic_label)
+    unique_labels, counts = np.unique(all_points_semantic_label, return_counts=True)
+    frequent_labels = unique_labels[counts > params_2d["line_points_num_thresh"]]
+    semantic_label = 0
+    for label in frequent_labels:
+        semantic_label = 0
+        if label == 0:
+            continue
+        else:
+            semantic_label = label_remapped[label-1]
+        if semantic_label != 0:
+            break
+    return semantic_label
 
 def get_line_eq(x0, y0, x1, y1):
     # derive 2d line paramaters from two endpoints
@@ -108,21 +130,16 @@ def extract_and_prune_2dlines(rgb):
 def get_foreground_points(valid_z):
     # Perform KMeans clustering for depth to distinguish fore- and back-ground
     kmeans = KMeans(n_clusters=2, random_state=0).fit(valid_z.reshape(-1, 1))
-    actual_clusters = len(np.unique(kmeans.labels_))
-    # special case
-    if actual_clusters == 1:
-        # there is only one depth cluster 
-        return list(range(0, len(valid_z))), np.mean(valid_z), False
-    # 
     depth_cluster_0 = valid_z[np.where(kmeans.labels_ == 0)]
     depth_cluster_1 = valid_z[np.where(kmeans.labels_ == 1)]
     foreground_idx = range(0, len(valid_z))
     centers = kmeans.cluster_centers_
     depth_mean = np.mean(valid_z) 
     background_flag=False
+    # special case: there is only one depth cluster 
     if len(np.unique(kmeans.labels_))==1:
-        # there is only one depth cluster 
         return foreground_idx,depth_mean,background_flag   
+    # the points have distinct depth
     if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2d["background_depth_diff_thresh"]:
         # there is a depth leap between two clusters
         depth_mean=centers[1][0]

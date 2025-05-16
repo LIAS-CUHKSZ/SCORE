@@ -168,10 +168,8 @@ def process_file(depth_img_name):
         if x1 == x2:
             y = np.arange(min(y1, y2), max(y1, y2))
             x = np.ones_like(y) * x1
-            A,B,C = 1,0,-x1
         else:
             m, c = helper.get_line_eq(x1, y1, x2, y2)  # y = mx + c
-            A,B,C = m,-1,c
             if abs(m) > 1:  # sample points on the longer axis
                 y = np.arange(min(y1, y2), max(y1, y2))
                 x = (y - c) / m
@@ -180,7 +178,6 @@ def process_file(depth_img_name):
                 y = m * x + c
         x = x.astype(np.int32) # since scannet++ only provides depth on integer pixels
         y = y.astype(np.int32) # since scannet++ only provides depth on integer pixels
-        line_2d_param_pixel = np.array([A, B, C])
         v = np.array([x2-x1,y2-y1])
         if np.linalg.norm(v)==0:
             continue
@@ -189,14 +186,33 @@ def process_file(depth_img_name):
         num_hypo=helper.params_2d["num_hypo"]
         depth_mean,xyz_list,foreground_idices,background_flag = helper.perturb_and_extract(x,y,render_depth,v,num_hypo*2+1)
         best_one = np.argmin(depth_mean)
+        foreground_x = xyz_list[best_one][foreground_idices[best_one],0].astype(np.int32)
+        foreground_y = xyz_list[best_one][foreground_idices[best_one],1].astype(np.int32)
+        cur_semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
         while (best_one < num_hypo):
-            if depth_mean[best_one+1]-depth_mean[best_one] < helper.params_2d["background_depth_diff_thresh"]:
+            if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2d["background_depth_diff_thresh"]:
+                break
+            foreground_x = xyz_list[best_one+1][foreground_idices[best_one+1],0].astype(np.int32)
+            foreground_y = xyz_list[best_one+1][foreground_idices[best_one+1],1].astype(np.int32)
+            semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
+            condition = cur_semantic_label in helper.params_2d["background_labels"]
+            condition = condition or (semantic_label not in helper.params_2d["background_labels"])
+            if condition:
                 best_one = best_one+1
+                cur_semantic_label = semantic_label
             else:
                 break
         while (best_one>num_hypo):
-            if depth_mean[best_one-1]-depth_mean[best_one] < helper.params_2d["background_depth_diff_thresh"]:
+            if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2d["background_depth_diff_thresh"]:
+                break
+            foreground_x = xyz_list[best_one-1][foreground_idices[best_one-1],0].astype(np.int32)
+            foreground_y = xyz_list[best_one-1][foreground_idices[best_one-1],1].astype(np.int32)
+            semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
+            condition = cur_semantic_label in helper.params_2d["background_labels"]
+            condition = condition or (semantic_label not in helper.params_2d["background_labels"])
+            if condition:
                 best_one = best_one-1
+                cur_semantic_label = semantic_label
             else:
                 break
         if depth_mean[best_one]==255:
@@ -207,35 +223,33 @@ def process_file(depth_img_name):
         foreground_x = xyz_list[best_one][foreground_idices[best_one],0].astype(np.int32)
         foreground_y = xyz_list[best_one][foreground_idices[best_one],1].astype(np.int32)
         foreground_z = xyz_list[best_one][foreground_idices[best_one],2]
+
         ### get the (dominant) semantic label for this 2d line
-        all_points_obj_ids = obj_ids[foreground_y, foreground_x]
-        all_points_semantic_label = []
-        for point_obj_id in all_points_obj_ids:
-            all_points_semantic_label.append(obj_id_label_id[point_obj_id])
-        all_points_semantic_label = np.array(all_points_semantic_label)
-        unique_labels, counts = np.unique(all_points_semantic_label, return_counts=True)
-        frequent_labels = unique_labels[counts > helper.params_2d["line_points_num_thresh"]]
-        semantic_label = 0
-        for label in frequent_labels:
-            if label == 0:
-                continue
-            if label_remapped[label-1] != 0:
-                semantic_label = label_remapped[label-1]
-                break
+        semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
         if semantic_label == 0: # no valid label for this line
             continue  
-        else: 
-            line_2d_points.append([x,y])
-            # draw the 2D lines along with their semantic labels
-            cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(rgb_color, str(line_2d_count), (int((x1 + x2) / 2), int((y1 + y2) / 2)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
-            cv2.putText(rgb_color, label_2_semantic_dict[semantic_label], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
-            if background_flag[best_one]:
-                cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            line_2d_params.append(line_2d_param_pixel)
-            line_2d_end_points.append([[x1,y1],[x2,y2]])
-            line_2d_semantic_label.append(semantic_label)
-            line_2d_count+=1
+        ###    
+        x1 = int(xyz_list[best_one][0,0])
+        y1 = int(xyz_list[best_one][0,1])
+        x2 = int(xyz_list[best_one][-1,0])
+        y2 = int(xyz_list[best_one][-1,1])
+        if x1 == x2:
+            A,B,C = 1,0,-x1
+        else:
+            m, c = helper.get_line_eq(x1, y1, x2, y2)  # y = mx + c
+            A,B,C = m,-1,c
+        line_2d_param_pixel = np.array([A, B, C])
+        line_2d_params.append(line_2d_param_pixel)
+        line_2d_points.append([xyz_list[best_one][:,0],xyz_list[best_one][:,1]])
+        line_2d_end_points.append([[x1,y1],[x2,y2]])
+        line_2d_semantic_label.append(semantic_label)
+        line_2d_count+=1
+        # draw the 2D lines along with their semantic labels
+        cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(rgb_color, str(line_2d_count), (int((x1 + x2) / 2), int((y1 + y2) / 2)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+        cv2.putText(rgb_color, label_2_semantic_dict[semantic_label], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
+        if background_flag[best_one]: # red color for highlighting that there are background points when extracting this line.
+            cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 0, 255), 2)
         ### regress the 3D line with found foreground points
         points_2d = np.concatenate([foreground_x[:, None], foreground_y[:, None], np.ones_like(foreground_x)[:, None]], axis=1)
         points_camera_3d = (np.linalg.inv(intrinsic) @ (points_2d * foreground_z[:, None]).T).T # get 3D points in the camera frame
@@ -285,14 +299,16 @@ def process_file(depth_img_name):
     # save rgb images with 2D line and semantic annotation
     cv2.imwrite(os.path.join(line_image_folder, f"{basename}.jpg"), rgb_color)    
     return (basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t)
-results=[]
-# unparalled code to process files
-for depth_img_name  in tqdm(depth_img_list):
-        result = process_file(depth_img_name)
-        results.append(result)
 
-## parallel code to process files
-# results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(i, depth_img_name) for i, depth_img_name in enumerate(depth_img_list))
+print(helper.params_2d["background_depth_diff_thresh"])
+results=[]
+# # unparalled code to process files
+# for depth_img_name  in tqdm(depth_img_list):
+#         result = process_file(depth_img_name)
+#         results.append(result)
+
+# parallel code to process files
+results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(depth_img_name) for depth_img_name in depth_img_list)
 
 # 
 for result in results:
