@@ -28,10 +28,11 @@ from skimage.measure import LineModelND, ransac
 from joblib import Parallel, delayed
 from scipy import stats
 
+
 ################################### Loading and Configuring ###################################
 root_dir = "/data1/home/lucky/ELSED"
 scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
-scene_id = scene_list[3]
+scene_id = scene_list[2]
 rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
 depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
@@ -113,23 +114,6 @@ with open(dictionary_file, "w") as dict_file:
             dict_file.write(f"{v},{k}\n")
             print(v, k)
 
-################################### Processing and Saving ###################################
-### Initialize data sturcture to be stored
-scene_pose = {}
-scene_intrinsic = {}
-# Store 2d lines from different images separately  
-scene_line_2d_points = {}
-scene_line_2d_end_points = {}
-scene_line_2d_semantic_labels = {}
-scene_line_2d_params = {}
-scene_line_2d_match_idx = {}
-scene_proj_error_r_raw = {}
-scene_proj_error_t_raw = {}
-# Store all 3d lines together 
-scene_line_3d_semantic_labels = []
-scene_line_3d_params = []
-scene_line_3d_end_points = []
-scene_line_3d_image_source = []
 ### function for processing a single image     
 def process_file(depth_img_name):
     basename = os.path.basename(depth_img_name).split(".")[0]
@@ -165,7 +149,7 @@ def process_file(depth_img_name):
         if x2 >= render_depth.shape[1] or y1 >= render_depth.shape[0] or y2 >= render_depth.shape[0]:
             continue
         # get all pixels on the line
-        if x1 == x2:
+        if x1 == x2: # special case for a vertical line
             y = np.arange(min(y1, y2), max(y1, y2))
             x = np.ones_like(y) * x1
         else:
@@ -183,56 +167,45 @@ def process_file(depth_img_name):
             continue
         v = v/np.linalg.norm(v)
         ### Get the foregound points by multi-hypothesis pertubation
-        num_hypo=helper.params_2d["num_hypo"]
-        depth_mean,xyz_list,foreground_idices,background_flag = helper.perturb_and_extract(x,y,render_depth,v,num_hypo*2+1)
+        depth_mean,xyz_list,foreground_idices,background_flag = helper.perturb_and_extract(x,y,render_depth,v,helper.params_2d["num_hypo"]*2+1)
+        if np.min(depth_mean) == 255: # no valid points
+            continue
         best_one = np.argmin(depth_mean)
         foreground_x = xyz_list[best_one][foreground_idices[best_one],0].astype(np.int32)
         foreground_y = xyz_list[best_one][foreground_idices[best_one],1].astype(np.int32)
-        cur_semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
-        while (best_one < num_hypo):
+        semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id)
+        while (best_one < helper.params_2d["num_hypo"]):
             if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2d["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one+1][foreground_idices[best_one+1],0].astype(np.int32)
             foreground_y = xyz_list[best_one+1][foreground_idices[best_one+1],1].astype(np.int32)
-            semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
-            condition = cur_semantic_label in helper.params_2d["background_labels"]
-            condition = condition or (semantic_label not in helper.params_2d["background_labels"])
-            if condition:
+            cur_semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id)
+            if cur_semantic_label == semantic_label: # no valid label for this line
                 best_one = best_one+1
-                cur_semantic_label = semantic_label
             else:
                 break
-        while (best_one>num_hypo):
+        while (best_one>helper.params_2d["num_hypo"]):
             if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2d["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one-1][foreground_idices[best_one-1],0].astype(np.int32)
             foreground_y = xyz_list[best_one-1][foreground_idices[best_one-1],1].astype(np.int32)
-            semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
-            condition = cur_semantic_label in helper.params_2d["background_labels"]
-            condition = condition or (semantic_label not in helper.params_2d["background_labels"])
-            if condition:
+            cur_semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id)
+            if cur_semantic_label == semantic_label: # no valid label for this line
                 best_one = best_one-1
-                cur_semantic_label = semantic_label
             else:
                 break
-        if depth_mean[best_one]==255:
-            # print("Failure: no depth info for this 2d line")
-            error_rot   = -1
-            error_trans = -1
-            continue
+ 
         foreground_x = xyz_list[best_one][foreground_idices[best_one],0].astype(np.int32)
         foreground_y = xyz_list[best_one][foreground_idices[best_one],1].astype(np.int32)
         foreground_z = xyz_list[best_one][foreground_idices[best_one],2]
-
-        ### get the (dominant) semantic label for this 2d line
-        semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id,label_remapped)
-        if semantic_label == 0: # no valid label for this line
-            continue  
+        semantic_label = helper.extract_dominant_label(foreground_y,foreground_x,obj_ids,obj_id_label_id)
+        if semantic_label == 0 or label_remapped[semantic_label-1]==0: # no valid label for this line
+            continue
+        semantic_label = label_remapped[semantic_label-1] 
         ###    
-        x1 = int(xyz_list[best_one][0,0])
-        y1 = int(xyz_list[best_one][0,1])
-        x2 = int(xyz_list[best_one][-1,0])
-        y2 = int(xyz_list[best_one][-1,1])
+        x1,y1 = xyz_list[best_one][0,0:2]
+        x2,y2 = xyz_list[best_one][-1,0:2]
+        x1,y1,x2,y2 = int(x1),int(y1),int(x2),int(y2)
         if x1 == x2:
             A,B,C = 1,0,-x1
         else:
@@ -287,25 +260,52 @@ def process_file(depth_img_name):
         point_max = inlier_points[max_index]
         p = (point_min+point_max)/2       
         line_3d_semantic_label.append(semantic_label)
-        line_3d_end_points.append([point_min,point_max]) 
+        line_3d_end_points.append([point_min,point_max])
+        # regulate the vector v if it is close to the x, y or z axis
+        if np.abs(np.dot(v, np.array([1, 0, 0]))) > 0.995:
+            v = np.array([1, 0, 0])
+        elif np.abs(np.dot(v, np.array([0, 1, 0]))) > 0.995:
+            v = np.array([0, 1, 0])
+        elif np.abs(np.dot(v, np.array([0, 0, 1]))) > 0.995:
+            v = np.array([0, 0, 1])
         line_3d_params.append([p,v])
         line_2d_match_idx.append(len(line_3d_params) - 1)
         # calculate projection error based on the pose
-        error_rot,error_trans = helper.calculate_error(line_2d_param_pixel.reshape(1,3),v,intrinsic,pose_matrix,p)
+        error_rot,error_trans = helper.calculate_error(line_2d_param_pixel.reshape(1,3),v, intrinsic,pose_matrix,p)
         if error_rot > 0.1 or error_trans>0.1:
             print(basename,j,error_rot,error_trans)
         proj_error_r.append(np.abs(error_rot))
         proj_error_t.append(np.abs(error_trans))
+    ###
+    if len(line_3d_semantic_label) < 5:
+        return (basename, [],[],[],[],[],[],[],[],[],[])
     # save rgb images with 2D line and semantic annotation
     cv2.imwrite(os.path.join(line_image_folder, f"{basename}.jpg"), rgb_color)    
     return (basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t)
 
+################################### Processing and Saving ###################################
+### Initialize data sturcture to be stored
+scene_pose = {}
+scene_intrinsic = {}
+# Store 2d lines from different images separately  
+scene_line_2d_points = {}
+scene_line_2d_end_points = {}
+scene_line_2d_semantic_labels = {}
+scene_line_2d_params = {}
+scene_line_2d_match_idx = {}
+scene_proj_error_r_raw = {}
+scene_proj_error_t_raw = {}
+# Store all 3d lines together 
+scene_line_3d_semantic_labels = []
+scene_line_3d_params = []
+scene_line_3d_end_points = []
+scene_line_3d_image_source = []
 print(helper.params_2d["background_depth_diff_thresh"])
 results=[]
-# # unparalled code to process files
+## unparalled code to process files
 # for depth_img_name  in tqdm(depth_img_list):
-#         result = process_file(depth_img_name)
-#         results.append(result)
+        # result = process_file(depth_img_name)
+        # results.append(result)
 
 # parallel code to process files
 results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(depth_img_name) for depth_img_name in depth_img_list)
@@ -314,6 +314,8 @@ results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_fil
 for result in results:
     basename, line_2d_points,line_2d_end_points, line_2d_params,line_2d_semantic_label, line_2d_match_idx, line_3d_semantic_label, line_3d_params, line_3d_end_points,proj_error_r,proj_error_t = result
     #
+    if line_2d_points == []:
+        continue
     scene_line_2d_points[basename] = line_2d_points
     scene_line_2d_end_points[basename] = line_2d_end_points
     scene_line_2d_params[basename] = line_2d_params # n_c=[A B C]
@@ -379,6 +381,3 @@ pcd.points = o3d.utility.Vector3dVector(point_sets)
 o3d.io.write_point_cloud(line_mesh_raw_folder + scene_id+f"_raw_3d_line_mesh.ply", pcd)
 print("Save raw 3D line mesh successfully.")
 print("Process completed.")
-
-
-

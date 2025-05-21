@@ -11,7 +11,7 @@
 13,poster
 14,exhaust fan
 15,calendar
-16,heater
+17,socket box
 18,frame
 19,ladder
 20,projector screen
@@ -22,13 +22,11 @@
 27,box
 29,computer tower
 30,monitor
+32,bar counter
 33,stool
-34,cone
 35,trash can
-38,light switch
 39,socket
 41,pedestal fan
-42,pillow
 45,ceiling
 46,speaker
 47,projector
@@ -40,15 +38,17 @@
 7,christmas tree
 10,doorframe
 12,paper
-17,socket box
+16,heater
 22,object
 26,ball
 28,tool box
 31,wine bottle
-32,bar counter
+34,cone
 36,fire extinguisher
 37,cables
+38,light switch
 40,table football
+42,pillow
 43,long pillow
 44,bowl
 48,bottle

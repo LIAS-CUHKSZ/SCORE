@@ -21,7 +21,7 @@ import os
 # home = os.path.expanduser("~")
 root_dir = "/data1/home/lucky/ELSED"
 # scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
-scene_list = ["55b2bf8036"]
+scene_list = ["c173f62b15"]
 for i in range(0,len(scene_list)):
     scene_id = scene_list[i]
     data_path = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/"+scene_id+f"_results_merged.npy"
@@ -33,6 +33,7 @@ for i in range(0,len(scene_list)):
     merged_line_3d_params = data['merged_scene_line_3d_params']
     merged_line_3d_semantic_labels = data['merged_scene_line_3d_semantic_labels']
     merged_line_3d_endpoints= data['merged_scene_line_3d_end_points']
+    merged_line_3d_image_idx = data['merged_scene_line_3d_image_idx']
     # 
     scene_line_2d_params = data['scene_line_2d_params']
     scene_line_2d_semantic_labels = data['scene_line_2d_semantic_labels']
@@ -78,15 +79,16 @@ for i in range(0,len(scene_list)):
 
     ### process all 3D lines in the scene
     num_3d_line = len(merged_line_3d_params)
-    # 3D line params: position(3x1), direction(3x1), semantic label(1), endpoint a(3x1), endpoint b(3x1)
-    lines_3d_all = np.empty([num_3d_line,13],dtype=float) 
+    # 3D line params: position(3x1), direction(3x1), semantic label(1), endpoint a(3x1), endpoint b(3x1), image_source
+    lines_3d_all = np.empty([num_3d_line,14],dtype=float) 
     for i  in range(0,num_3d_line):
         lines_3d_all[i][0:3] = merged_line_3d_params[i][0]
         lines_3d_all[i][3:6] = merged_line_3d_params[i][1]
         lines_3d_all[i][6] = merged_line_3d_semantic_labels[i]
         lines_3d_all[i][7:10] = merged_line_3d_endpoints[i][0]
         lines_3d_all[i][10:13] = merged_line_3d_endpoints[i][1]
-    df_3d = pd.DataFrame(lines_3d_all, columns=['x','y','z','vx','vy','vz','semantic_label','xa','ya','za','xb','yb','zb'])
+        lines_3d_all[i][13] = merged_line_3d_image_idx[i]
+    df_3d = pd.DataFrame(lines_3d_all, columns=['x','y','z','vx','vy','vz','semantic_label','xa','ya','za','xb','yb','zb','image_source'])
     df_3d.to_csv(base_path+'3dlines.csv', index=False)
 
 

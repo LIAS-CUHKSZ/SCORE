@@ -24,15 +24,13 @@ params_2d = {
     "validate": True,
     "treatJunctions": True,
     # for 2d line merging
-    "pix_dis_thresh": 20,                    # tune this to filter nearby 2D lines
+    "pix_dis_thresh": 120,                    # tune this to filter nearby 2D lines
     "parallel_thres_2d": np.cos(3*np.pi/180), 
     # for 3d line regression
     "background_depth_diff_thresh": 0.2,     # tune this to threshold the depth leap between fore- and back-ground points 
-    "line_points_num_thresh": 30,            # tune this to threshold the minimal number required to regress a reliable 3D line
-    "perturb_length": 24,                    # tune this to adjust the perturbation 
-     "num_hypo":12,                            # tune this to adjust the hypothesis number
-    # wall and floor label
-    "background_labels": {8,18},
+    "line_points_num_thresh": 66,            # tune this to threshold the minimal number required to regress a reliable 3D line
+    "perturb_length": 12,                    # tune this to adjust the perturbation 
+     "num_hypo":6,                            # tune this to adjust the hypothesis number
 }
 
 # parameters for line_extractor_pt2
@@ -40,13 +38,13 @@ params_3d = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3d line merging
-    "parrallel_thresh_3d":np.cos(1.5*np.pi/180), # tune this
-    "overlap_thresh_3d": 0.015,                  # tune this
+    "parrallel_thresh_3d":np.cos(3*np.pi/180), # tune this
+    "overlap_thresh_3d": 0.05,                  # tune this
     # for 3d line pruning
     "degree_threshold": 1,                       # tune this
 }
 
-def extract_dominant_label(y,x,obj_ids,obj_id_label_id,label_remapped):
+def extract_dominant_label(y,x,obj_ids,obj_id_label_id):
     ### get the (dominant) semantic label for this 2d line
     all_points_obj_ids = obj_ids[y, x]
     all_points_semantic_label = []
@@ -54,16 +52,20 @@ def extract_dominant_label(y,x,obj_ids,obj_id_label_id,label_remapped):
         all_points_semantic_label.append(obj_id_label_id[point_obj_id])
     all_points_semantic_label = np.array(all_points_semantic_label)
     unique_labels, counts = np.unique(all_points_semantic_label, return_counts=True)
-    frequent_labels = unique_labels[counts > params_2d["line_points_num_thresh"]]
     semantic_label = 0
-    for label in frequent_labels:
-        semantic_label = 0
-        if label == 0:
-            continue
-        else:
-            semantic_label = label_remapped[label-1]
-        if semantic_label != 0:
-            break
+    if np.max(counts) > params_2d["line_points_num_thresh"]:
+        # get the most frequent label
+        semantic_label = unique_labels[np.argmax(counts)] 
+    # frequent_labels = unique_labels[counts > params_2d["line_points_num_thresh"]]
+    # semantic_label = 0
+    # for label in frequent_labels:
+    #     semantic_label = 0
+    #     if label == 0:
+    #         continue
+    #     else:
+    #         semantic_label = label_remapped[label-1]
+    #     if semantic_label != 0:
+    #         break
     return semantic_label
 
 def get_line_eq(x0, y0, x1, y1):
@@ -90,7 +92,7 @@ def extract_and_prune_2dlines(rgb):
         x1, y1, x2, y2 = segment
         if x2 < x1:
             segments[j] = x2, y2, x1, y1
-    # prune redundant 2d lines
+    # prune proximate parallel 2d lines
     sorted_index = np.argsort(scores)[::-1]
     segments = segments[sorted_index]
     scores = scores[sorted_index]
@@ -164,7 +166,7 @@ def perturb_and_extract(x,y,render_depth,v,num_hypo):
     foreground_idices = []
     for k in range(len(move_length_list)):
         mov_length = move_length_list[k]
-        ### perturbed lines
+        ### perturbed lines in the orthogonal direction
         x_perturbed = x + int(mov_length*v[1]) 
         y_perturbed = y + int(-mov_length*v[0])
         ### shrink the perturbed line a little bit
@@ -173,9 +175,10 @@ def perturb_and_extract(x,y,render_depth,v,num_hypo):
         y_perturbed = y_perturbed[shrinked_points:-shrinked_points]
         ###
         valid_idx = np.logical_and(x_perturbed<render_depth.shape[1],y_perturbed<render_depth.shape[0])
-        valid_idx_ = np.logical_and(valid_idx,x_perturbed>=0,y_perturbed>=0)
-        x_perturbed = x_perturbed[valid_idx_]
-        y_perturbed = y_perturbed[valid_idx_]    
+        valid_idx_ = np.logical_and(valid_idx,x_perturbed>=0)
+        valid_idx__ = np.logical_and(valid_idx_,y_perturbed>=0)
+        x_perturbed = x_perturbed[valid_idx__]
+        y_perturbed = y_perturbed[valid_idx__]    
         ###    
         z_perturbed = render_depth[y_perturbed, x_perturbed]
         valid_z = z_perturbed[np.where(z_perturbed != 0)]
