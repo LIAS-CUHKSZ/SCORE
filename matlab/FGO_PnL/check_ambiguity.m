@@ -21,20 +21,26 @@
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,prox_thres,verbose_flag,mex_flag)
+function [ambiguity_flag,err] = check_ambiguity(vector_n,vector_v,id,branch_reso,epsilon_r,sample_reso,prox_thres,verbose_flag,mex_flag,R_gt)
+ambiguity_flag=false;
+kernel_trunc = @(x) 1-(x>1);
+trunc_num = 2;
+kernel_buffer=zeros(trunc_num,1);
+for i=1:trunc_num
+    kernel_buffer(i)=kernel_trunc(i);
+end
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
-tic
 %%% Initialize the BnB process
 % calculate bounds for east and west semispheres.
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
 if mex_flag
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);
     [upper_west,lower_west,theta_west]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
 else
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
+    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);
     [upper_west,lower_west,theta_west]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
 end
 branch=[branch,[B_east;upper_east;lower_east]];
@@ -42,24 +48,22 @@ branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
 best_lower = max(lower_east,lower_west);
 if lower_east>=lower_west
-   theta_best = cluster_stabber(theta_east,prox_thres);
-   u_best=polar_2_xyz(0.5*(B_east(1)+B_east(3)),0.5*(B_east(2)+B_east(4)));
+    theta_best = cluster_stabber(theta_east,prox_thres);
+    u_best=polar_2_xyz(0.5*(B_east(1)+B_east(3)),0.5*(B_east(2)+B_east(4)));
 else
-   theta_best = cluster_stabber(theta_west,prox_thres);
-   u_best=polar_2_xyz(0.5*(B_west(1)+B_west(3)),0.5*(B_west(2)+B_west(4)));
+    theta_best = cluster_stabber(theta_west,prox_thres);
+    u_best=polar_2_xyz(0.5*(B_west(1)+B_west(3)),0.5*(B_west(2)+B_west(4)));
 end
-u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS 
+u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS
 % select the next exploring branch according to the upper bounds
 best_upper = max(upper_east,upper_west);
 idx_upper = 2-(upper_east>upper_west);
 next_branch=branch(1:4,idx_upper);
 branch(:,idx_upper)=[];
-% record bounds history
-upper_record=best_upper; lower_record=best_lower;
 %%% start BnB
-new_upper=zeros(1,4); new_lower=zeros(1,4); 
+new_upper=zeros(1,4); new_lower=zeros(1,4);
 new_theta_lower=cell(1,4); % it is possible that multiple optimal stabbers returned by Sat-IS
-iter=1;
+iter = 1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
@@ -97,8 +101,6 @@ while true
             end
         end
     end
-    upper_record=[upper_record;best_upper];
-    lower_record=[lower_record;best_lower];
     best_upper = max(branch(5,:));
     idx_upper = find(branch(5,:)==best_upper);
     branch_size=branch(3,idx_upper)-branch(1,idx_upper);
@@ -107,18 +109,27 @@ while true
     next_branch=branch(1:4,idx_upper);
     branch(:,idx_upper)=[];
     branch(:,branch(5,:)<best_lower)=[];
-    if (  (next_branch(3,1) - next_branch(1,1)) < branch_reso )
+    if best_lower == length(vector_n)
+        err = 0;
+        for i=1:size(u_best,2)
+            R_=rotvec2mat3d(u_best(:,i)*theta_best(i));
+            err_ = angular_distance(R_,R_gt);
+            err = max(err, err_);
+            if err>30
+               ambiguity_flag = true;
+               break;
+            end
+        end
+    end
+    if ambiguity_flag
         break;
     end
-    iter=iter+1;
+    if (  (next_branch(3,1) - next_branch(1,1)) < branch_reso ) && best_lower == length(vector_n)
+        break;
+    end
+    iter = iter +1;
 end
-%%% output
-num_candidate=size(u_best,2);
-R_opt=[];
-for i=1:num_candidate
-    R_opt = [R_opt;rotvec2mat3d(u_best(:,i)*theta_best(i))];
-end
-time=toc;
+
 end
 
 %%%%%%%%%%%%%%%%%%%%% subfunctions %%%%%%%%%%%%%%%%%%%%%%
@@ -146,18 +157,16 @@ end
 
 function out=subBranch(branch)
 % divide the input 2D cube into four subcubes
-a=branch(1:2);
-b=branch(3:end);
+out=zeros(4,4);
+a=branch(1:2); b=branch(3:end);
 c=0.5*(a+b);
 M=[a,c,b];
-out=zeros(4,4);
 for i=1:4
     out(1,i)= M(1,bitget(i,1)+1);
     out(2,i)= M(2,bitget(i,2)+1);
     out(3,i)= M(1,bitget(i,1)+2);
     out(4,i)= M(2,bitget(i,2)+2);
 end
-
 end
 %
 function prox_flag = evaluate_proximity(theta_best,u_best,R_new,prox_thres)

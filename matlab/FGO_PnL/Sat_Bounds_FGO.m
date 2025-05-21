@@ -42,7 +42,16 @@ end
 %%% calculate upper bound based on rigoros interval anlaysis
 % obtain the interval for each matched pair
 % calculate the extreme values for the h1 and h2 function
-[h1_upper,h1_lower] = h1_interval_mapping(line_pair,Branch,sample_resolution);
+% [h1_upper,h1_lower] = h1_interval_mapping(line_pair,Branch,sample_resolution);
+[h1_upper,h1_lower]=h1_violent(line_pair,Branch,sample_resolution);
+% if sum(abs(h1_upper_-h1_upper))>0.01
+%     h1_upper_'
+%     h1_upper'
+% end
+% if sum(abs(h1_lower_-h1_lower))>0.01
+%     h1_lower_'
+%     h1_lower'
+% end
 [h2_upper,h2_lower] = h2_interval_mapping(line_pair,Branch,sample_resolution);
 [A_lower,phi_lower,const_lower] = cal_params(line_pair.inner_product,h1_lower,h2_lower);
 [A_upper,phi_upper,const_upper] = cal_params(line_pair.inner_product,h1_upper,h2_upper);
@@ -62,10 +71,11 @@ end
 
 %%%
 function [A,phi,const] = cal_params(product, h1 ,h2)
-    %%% f =  c + sin(theta)* h1 + (1-cos theta )* h2  
-    %%%   =  h1 sin(theta) - h2 cos(theta) + c+ h2
+    %%% f =  product + sin(theta)* h1 + (1-cos theta )* h2  
+    %%%   =  h1 sin(theta) - h2 cos(theta) + product + h2
     A = sqrt(h1.^2 + h2.^2);
     phi = atan2(-h2,h1);
-    phi =phi.*(phi>=0) + (phi+2*pi).*(phi<0);
+    phi =phi.*(phi>=0) + (phi+2*pi).*(phi<0); % make sure that phi in [0,2*pi]
     const = product+h2;
 end
+

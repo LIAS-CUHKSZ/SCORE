@@ -5,9 +5,9 @@
 %   A_2*sin(theta + phi_2)+ const_2 <= epsilon
 
 %%% Inputs:
-% A_1, A_2:             Nx1
-% phi_1, phi_2:         Nx1
-% const_1, const_2:     Nx1
+% A_1, A_2:             scalar
+% phi_1, phi_2:         scalar
+% const_1, const_2:     scalar
 % epsilon:              scalar
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
@@ -86,6 +86,10 @@ for i=1:num_up
                    ];
     end
 end
+% test_flag = test_interval(interval,A_1,phi_1,const_1,A_2,phi_2,const_2,epsilon);
+% if ~test_flag
+%     test_flag
+% end
 end
 
 function [c]=intersect_interval(a, b)
@@ -94,4 +98,24 @@ function [c]=intersect_interval(a, b)
     else
         c = [max(a(1), b(1)); min(a(2), b(2))];
     end
+end
+
+function test_flag = test_interval(intervals,A_1,phi_1,const_1,A_2,phi_2,const_2,epsilon)
+test_flag=true;
+num = length(intervals)/2;
+for n=1:num
+    inter_l = intervals(n*2-1);
+    inter_r = intervals(n*2);
+    test_points = linspace(inter_l,inter_r,10);
+    % A_1*sin(theta + phi_1)+ const_1 >=-epsilon
+    value = A_1*sin(test_points+phi_1)+const_1;
+    if value < -epsilon
+        test_flag = false;
+    end
+    %   A_2*sin(theta + phi_2)+ const_2 <= epsilon
+    value = A_2*sin(test_points+phi_2)+const_2;
+    if value > epsilon
+        test_flag = false;
+    end
+end
 end

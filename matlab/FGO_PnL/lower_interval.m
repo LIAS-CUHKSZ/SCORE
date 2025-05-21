@@ -120,5 +120,24 @@ function [interval] = lower_interval(A,phi,const,epsilon)
             return;
         end
     end
+    % test_flag = test_lower_interval(interval,A,phi,const,epsilon);
+    % if ~test_flag
+    %     test_flag
+    % end
+end
+
+
+function [test_flag] = test_lower_interval(intervals,A_,phi_,const_,epsilon)
+    test_flag = true;
+    num = length(intervals)/2;
+    for n=1:num
+        inter_l = intervals(n*2-1);
+        inter_r = intervals(n*2);
+        test_points = linspace(inter_l,inter_r,10);
+        value = A_*sin(phi_+test_points)+const_;
+        if abs(value) > epsilon
+            test_flag = false;
+        end
+    end
 end
 

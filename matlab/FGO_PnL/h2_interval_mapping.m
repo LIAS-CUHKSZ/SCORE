@@ -81,9 +81,7 @@ function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolutio
         end
         upper(i) = upper(i)- inner_product;
         lower(i) = lower(i) - inner_product;
-
     end
-
 
 end
 
