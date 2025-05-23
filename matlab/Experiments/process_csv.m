@@ -12,7 +12,7 @@ clc;
 %%% config
 % dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
 dataset_ids = ["c173f62b15"];
-cluster_degree = 0.5;
+cluster_degree = 0.3;
 parallel_threshold=cosd(cluster_degree); % tune this if necessary
 %%%
 for n=1:length(dataset_ids)
