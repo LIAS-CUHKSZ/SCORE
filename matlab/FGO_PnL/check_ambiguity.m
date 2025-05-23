@@ -21,7 +21,7 @@
 %%% License: MIT
 %%%%
 
-function [ambiguity_flag,err] = check_ambiguity(vector_n,vector_v,id,branch_reso,epsilon_r,sample_reso,prox_thres,verbose_flag,mex_flag,R_gt)
+function [ambiguity_flag,err,R_amb] = check_ambiguity(vector_n,vector_v,id,branch_reso,epsilon_r,sample_reso,prox_thres,verbose_flag,mex_flag,R_gt)
 ambiguity_flag=false;
 kernel_trunc = @(x) 1-(x>1);
 trunc_num = 2;
@@ -113,10 +113,11 @@ while true
         err = 0;
         for i=1:size(u_best,2)
             R_=rotvec2mat3d(u_best(:,i)*theta_best(i));
-            err_ = angular_distance(R_,R_gt);
+            err_ = angular_distance(R_,R_gt');
             err = max(err, err_);
             if err>30
                ambiguity_flag = true;
+               R_amb = R_;
                break;
             end
         end
@@ -129,7 +130,7 @@ while true
     end
     iter = iter +1;
 end
-
+R_amb = R_;
 end
 
 %%%%%%%%%%%%%%%%%%%%% subfunctions %%%%%%%%%%%%%%%%%%%%%%
