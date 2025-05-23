@@ -202,6 +202,43 @@ def process_file(depth_img_name):
         if semantic_label == 0 or label_remapped[semantic_label-1]==0: # no valid label for this line
             continue
         semantic_label = label_remapped[semantic_label-1] 
+        ### regress the 3D line with found foreground points
+        points_2d = np.concatenate([foreground_x[:, None], foreground_y[:, None], np.ones_like(foreground_x)[:, None]], axis=1)
+        points_camera_3d = (np.linalg.inv(intrinsic) @ (points_2d * foreground_z[:, None]).T).T # get 3D points in the camera frame
+        points_world_3d = (
+            pose_matrix @ np.concatenate([points_camera_3d, np.ones((points_camera_3d.shape[0], 1))], axis=1).T
+        ) # transform to the world frame
+        points_world_3d = points_world_3d[:3, :].T
+        try:
+            model_robust, inliers = ransac(
+                points_world_3d, LineModelND, min_samples=3, residual_threshold=0.02, max_trials=3000
+            )
+        except: # if the line regression fails, we skip this line
+            continue
+        inlier_index = np.where(inliers == True)
+        # if the number of inliers is less than a threshold, we discard this 3d line
+        if np.size(inlier_index) < helper.params_2d["line_points_num_thresh"]:
+            continue
+        # obtain and store 3D line paramaters
+        v = model_robust.params[1]
+        sig_dim = np.argmax(abs(v))
+        inlier_points = points_world_3d[inlier_index]
+        min_index = np.argmin(inlier_points[:, sig_dim])
+        max_index = np.argmax(inlier_points[:, sig_dim])
+        point_min,point_max = inlier_points[[min_index,max_index]]
+        # regulate the vector v if it is close to the x, y or z axis
+        if np.abs(np.dot(v, np.array([1, 0, 0]))) > 0.995:
+            v = np.array([1, 0, 0])
+        elif np.abs(np.dot(v, np.array([0, 1, 0]))) > 0.995:
+            v = np.array([0, 1, 0])
+        elif np.abs(np.dot(v, np.array([0, 0, 1]))) > 0.995:
+            v = np.array([0, 0, 1])
+        p = (point_min+point_max)/2
+        point_min = p + np.outer(v,v)@(point_min - p)
+        point_max = p + np.outer(v,v)@(point_max - p)
+        line_3d_semantic_label.append(semantic_label)
+        line_3d_end_points.append([point_min,point_max])
+        line_3d_params.append([p,v])
         ###    
         x1,y1 = xyz_list[best_one][0,0:2]
         x2,y2 = xyz_list[best_one][-1,0:2]
@@ -216,59 +253,6 @@ def process_file(depth_img_name):
         line_2d_points.append([xyz_list[best_one][:,0],xyz_list[best_one][:,1]])
         line_2d_end_points.append([[x1,y1],[x2,y2]])
         line_2d_semantic_label.append(semantic_label)
-        line_2d_count+=1
-        # draw the 2D lines along with their semantic labels
-        cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(rgb_color, str(line_2d_count), (int((x1 + x2) / 2), int((y1 + y2) / 2)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
-        cv2.putText(rgb_color, label_2_semantic_dict[semantic_label], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
-        if background_flag[best_one]: # red color for highlighting that there are background points when extracting this line.
-            cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 0, 255), 2)
-        ### regress the 3D line with found foreground points
-        points_2d = np.concatenate([foreground_x[:, None], foreground_y[:, None], np.ones_like(foreground_x)[:, None]], axis=1)
-        points_camera_3d = (np.linalg.inv(intrinsic) @ (points_2d * foreground_z[:, None]).T).T # get 3D points in the camera frame
-        points_world_3d = (
-            pose_matrix @ np.concatenate([points_camera_3d, np.ones((points_camera_3d.shape[0], 1))], axis=1).T
-        ) # transform to the world frame
-        points_world_3d = points_world_3d[:3, :].T
-        try:
-            model_robust, inliers = ransac(
-                points_world_3d, LineModelND, min_samples=3, residual_threshold=0.02, max_trials=3000
-            )
-        except:
-            print("Faliure: 3D line regression")
-            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
-            proj_error_r.append(np.nan)
-            proj_error_t.append(np.nan)
-            line_2d_match_idx.append(np.nan)
-            continue
-        inlier_index = inliers == True
-        # if the number of inliers is less than a threshold, we discard this 3d line
-        if len(inlier_index) < helper.params_2d["line_points_num_thresh"]:
-            print("Faliure: 3D line regression")
-            cv2.line(rgb_color, (x1, y1), (int((x1+x2)/2), int((y1+y2)/2)), (255, 0, 0), 2) # mark the failed lines with red color
-            proj_error_r.append(np.nan)
-            proj_error_t.append(np.nan)
-            line_2d_match_idx.append(np.nan)
-            continue
-        # obtain and store 3D line paramaters
-        v = model_robust.params[1]
-        sig_dim = np.argmax(abs(v))
-        inlier_points = points_world_3d[inlier_index]
-        min_index = np.argmin(inlier_points[:, sig_dim])
-        max_index = np.argmax(inlier_points[:, sig_dim])
-        point_min = inlier_points[min_index]
-        point_max = inlier_points[max_index]
-        p = (point_min+point_max)/2       
-        line_3d_semantic_label.append(semantic_label)
-        line_3d_end_points.append([point_min,point_max])
-        # regulate the vector v if it is close to the x, y or z axis
-        if np.abs(np.dot(v, np.array([1, 0, 0]))) > 0.995:
-            v = np.array([1, 0, 0])
-        elif np.abs(np.dot(v, np.array([0, 1, 0]))) > 0.995:
-            v = np.array([0, 1, 0])
-        elif np.abs(np.dot(v, np.array([0, 0, 1]))) > 0.995:
-            v = np.array([0, 0, 1])
-        line_3d_params.append([p,v])
         line_2d_match_idx.append(len(line_3d_params) - 1)
         # calculate projection error based on the pose
         error_rot,error_trans = helper.calculate_error(line_2d_param_pixel.reshape(1,3),v, intrinsic,pose_matrix,p)
@@ -276,6 +260,13 @@ def process_file(depth_img_name):
             print(basename,j,error_rot,error_trans)
         proj_error_r.append(np.abs(error_rot))
         proj_error_t.append(np.abs(error_trans))
+        # draw the 2D lines along with their semantic labels
+        line_2d_count+=1
+        cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(rgb_color, str(line_2d_count), (int((x1 + x2) / 2), int((y1 + y2) / 2)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+        cv2.putText(rgb_color, label_2_semantic_dict[semantic_label], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 2)
+        if background_flag[best_one]: # red color for highlighting that there are background points when extracting this line.
+            cv2.line(rgb_color, (x1, y1), (x2, y2), (0, 0, 255), 2)
     ###
     if len(line_3d_semantic_label) < 5:
         return (basename, [],[],[],[],[],[],[],[],[],[])

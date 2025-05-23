@@ -38,7 +38,7 @@ params_3d = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3d line merging
-    "parrallel_thresh_3d":np.cos(3*np.pi/180), # tune this
+    "parrallel_thresh_3d":np.cos(2*np.pi/180), # tune this
     "overlap_thresh_3d": 0.05,                  # tune this
     # for 3d line pruning
     "degree_threshold": 1,                       # tune this
