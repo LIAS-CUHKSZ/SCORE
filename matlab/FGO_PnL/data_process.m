@@ -27,36 +27,37 @@ vector_o_normal_west = zeros(N,3);
 vector_outer_west =zeros(N,3);
 vector_outer_east= zeros(N,3);
 outer_norm =zeros(N,1);
-outer_product_belong = zeros(N,1); % which half sphere the vector belongs to  1 for east and 0 for west
+outer_product_belong = zeros(N,1); 
 for i=1:N
     n = vector_n(i,:);
     v = vector_v(i,:);
     outer_product(i,:) = cross(v,n);
-    outer_angle  = zeros(2,1);
-    [outer_angle(1), outer_angle(2) ]= xyz_2_polar(outer_product(i,:));
-    if outer_angle(2) > pi
-        outer_east(i,:) = [pi-outer_angle(1),outer_angle(2)-pi];
-        outer_west(i,:) = [outer_angle(1),outer_angle(2)];
-    else
-        outer_east(i,:) = [outer_angle(1),outer_angle(2)];
-        outer_west(i,:) = [pi-outer_angle(1),outer_angle(2)+pi];
-    end
-    inner_product(i) = dot(n,v);
-    [normal_east(i,:),normal_west(i,:),o_normal_east(i,:),o_normal_west(i,:)] = normal(n,v);
-    vector_normal_east(i,:) = [sin(normal_east(i,1))*cos(normal_east(i,2)),sin(normal_east(i,1))*sin(normal_east(i,2)),cos(normal_east(i,1))];
-    vector_normal_west(i,:) = [sin(normal_west(i,1))*cos(normal_west(i,2)),sin(normal_west(i,1))*sin(normal_west(i,2)),cos(normal_west(i,1))];
-    vector_o_normal_east(i,:) = [sin(o_normal_east(i,1))*cos(o_normal_east(i,2)),sin(o_normal_east(i,1))*sin(o_normal_east(i,2)),cos(o_normal_east(i,1))];
-    vector_o_normal_west(i,:) = [sin(o_normal_west(i,1))*cos(o_normal_west(i,2)),sin(o_normal_west(i,1))*sin(o_normal_west(i,2)),cos(o_normal_west(i,1))];
-    outer_norm(i) = norm(outer_product(i,:));
-    if outer_product(i,2) >= 0
-        outer_product_belong(i) = 1;
+    outer_product_belong(i) = outer_product(i,2)>=0; % belonging half sphere, 1 for east and 0 for west
+    if outer_product_belong(i)
         vector_outer_east(i,:) =outer_product(i,:);
         vector_outer_west(i,:) =-outer_product(i,:);
     else
         vector_outer_east(i,:) =-outer_product(i,:);
         vector_outer_west(i,:) = outer_product(i,:);
-        outer_product_belong(i) = 0;
     end
+    %
+    outer_angle  = zeros(2,1);
+    [outer_angle(1), outer_angle(2) ]= xyz_2_polar(outer_product(i,:));
+    if outer_angle(2) > pi   % alpha in [0,pi], phi in [0, 2*pi]
+        outer_east(i,:) = [pi-outer_angle(1),outer_angle(2)-pi];
+        outer_west(i,:) = [outer_angle(1),outer_angle(2)];           
+    else
+        outer_east(i,:) = [outer_angle(1),outer_angle(2)];
+        outer_west(i,:) = [pi-outer_angle(1),outer_angle(2)+pi];
+    end
+    %
+    inner_product(i) = dot(v,n);
+    [normal_east(i,:),normal_west(i,:),o_normal_east(i,:),o_normal_west(i,:)] = normal(n,v);
+    vector_normal_east(i,:) = polar_2_xyz(normal_east(i,1),normal_east(i,2))';
+    vector_normal_west(i,:) = polar_2_xyz(normal_west(i,1),normal_west(i,2))';
+    vector_o_normal_east(i,:) = polar_2_xyz(o_normal_east(i,1),o_normal_east(i,2))';
+    vector_o_normal_west(i,:) = polar_2_xyz(o_normal_west(i,1),o_normal_west(i,2))';
+    outer_norm(i) = norm(outer_product(i,:));
 end
 line_pair_data.outer_product_belong = outer_product_belong;
 line_pair_data.vector_normal_east = vector_normal_east;

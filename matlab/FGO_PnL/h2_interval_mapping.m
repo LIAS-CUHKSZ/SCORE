@@ -16,10 +16,8 @@ function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolutio
     N = line_pair.size;
     upper = zeros(N,1);
     lower = zeros(N,1);
-    cube_width = branch(3)-branch(1);
-    maximum = 0;
-    minimum = 0;
-    if cube_width <=sample_resolution % compare four vertices
+    maximum = 0; minimum = 0;
+    if branch(3)-branch(1) <=sample_resolution % compare four vertices
         vertex_cache=zeros(4,3);
         vertex_cache(1,:)= polar_2_xyz(branch(1),branch(2));
         vertex_cache(2,:)= polar_2_xyz(branch(1),branch(4));
@@ -37,6 +35,7 @@ function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolutio
         vertex_cache(3*temp+1:4*temp,:)=vec_polar2xyz(alpha(1),phi(2:end));
 
     end
+    %%%
     for i = 1:N
         n_i = line_pair.vector_n(i,:);
         v_i = line_pair.vector_v(i,:);
@@ -70,17 +69,15 @@ function [upper , lower] = h2_interval_mapping(line_pair,branch,sample_resolutio
         ttt = (vertex_cache*n_i').*(vertex_cache*v_i');
         [tmp_minimum,tmp_maximum] = bounds(ttt,"all");
         if flag==2
-            upper(i) = maximum;
-            lower(i) = tmp_minimum;
+            upper(i) = maximum - inner_product;
+            lower(i) = tmp_minimum - inner_product;
         elseif flag==1
-            upper(i) = tmp_maximum;
-            lower(i) = minimum;
+            upper(i) = tmp_maximum - inner_product;
+            lower(i) = minimum - inner_product;
         else
-            upper(i) = tmp_maximum;
-            lower(i) = tmp_minimum;
+            upper(i) = tmp_maximum - inner_product;
+            lower(i) = tmp_minimum - inner_product;
         end
-        upper(i) = upper(i)- inner_product;
-        lower(i) = lower(i) - inner_product;
     end
 
 end

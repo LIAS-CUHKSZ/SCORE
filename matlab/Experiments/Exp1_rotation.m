@@ -12,7 +12,7 @@
 clear;
 clc;
 dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
-dataset_idx = dataset_ids(3);
+dataset_idx = dataset_ids(2);
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 
@@ -54,7 +54,7 @@ sample_reso = pi/256; % resolution for interval analysis
 % set threshold
 line_num_thres=5; % minimal number of 2D lines required in the image
 % epsilon_r = 0.03;
-parfor num =0:total_img
+for num =0:total_img
     img_idx=num*10;     
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
@@ -70,31 +70,32 @@ parfor num =0:total_img
     R_gt = T_gt(1:3,1:3); t_gt=T_gt(1:3,4);
     lines2D(:,1:3)=lines2D(:,1:3)*K; 
     lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
-    % %%% check ambiguity
-    lines2D_matched = lines2D(lines2D(:,end)>=0,:);
-    M = size(lines2D_matched,1);
-    if M <=line_num_thres
-        continue
-    end
-    n_2D_gt = zeros(M,3);
-    v_3D_gt = zeros(M,3);
-    residual_r = zeros(M,1);
-    for i=1:M
-        matched_idx = int32(lines2D_matched(i,end))+1;
-        n = lines2D_matched(i,1:3);
-        v = lines3D(matched_idx,4:6);
-        residual_r(i)=abs((R_gt*n')'*v');
-        n_2D_gt(i,:)=n; v_3D_gt(i,:)=v';
-    end
-    epsilon_r = max(residual_r)*1.2;
-    id_gt = 1:M;
-    [ambiguity_flag,err] = check_ambiguity(n_2D_gt,v_3D_gt,id_gt',...
-        branch_reso,epsilon_r,sample_reso,prox_thres,0,mex_flag,R_gt);
-    if ambiguity_flag
-        fprintf(num2str(img_idx)+"\n")
-        fprintf("ambigious setting, skip.\n");
-        continue
-    end
+    epsilon_r=0.03;
+    % % %%% check ambiguity
+    % lines2D_matched = lines2D(lines2D(:,end)>=0,:);
+    % M = size(lines2D_matched,1);
+    % if M <=line_num_thres
+    %     continue
+    % end
+    % n_2D_gt = zeros(M,3);
+    % v_3D_gt = zeros(M,3);
+    % residual_r = zeros(M,1);
+    % for i=1:M
+    %     matched_idx = int32(lines2D_matched(i,end))+1;
+    %     n = lines2D_matched(i,1:3);
+    %     v = lines3D(matched_idx,4:6);
+    %     residual_r(i)=abs((R_gt*n')'*v');
+    %     n_2D_gt(i,:)=n; v_3D_gt(i,:)=v';
+    % end
+    % epsilon_r = max(residual_r)*1.2;
+    % id_gt = 1:M;
+    % [ambiguity_flag,err] = check_ambiguity(n_2D_gt,v_3D_gt,id_gt',...
+    %     branch_reso,epsilon_r,sample_reso,prox_thres,0,mex_flag,R_gt);
+    % if ambiguity_flag
+    %     fprintf(num2str(img_idx)+"\n")
+    %     fprintf("ambigious setting, skip.\n");
+    %     continue
+    % end
     fprintf(num2str(img_idx)+"\n")
     %%% match 2D and 3D lines using semnatic label
     % match with unclustered 3D lines 
