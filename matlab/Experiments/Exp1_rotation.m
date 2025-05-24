@@ -17,7 +17,7 @@ data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 
 %%% statistics
-total_img=300;
+total_img=100;
 column_names=...
     ["image id","time","orient err","# 2D lines with match","score","score under gt","# candidates"];
 columnTypes =...
@@ -54,7 +54,7 @@ branch_reso = pi/256; % terminate bnb when branch size <= branch_reso
 sample_reso = pi/256; % resolution for interval analysis
 % set threshold
 line_num_thres=5; % minimal number of 2D lines required in the image
-parfor num =0:total_img
+for num =39:total_img
     img_idx=num*10;     
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
