@@ -12,7 +12,7 @@
 clear;
 clc;
 dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
-dataset_idx = dataset_ids(2);
+dataset_idx = dataset_ids(3);
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 
@@ -49,7 +49,7 @@ end
 % basically we keep all the candidates which are not proximate to each other
 prox_thres = 3*pi/180;
 verbose_flag=0; % verbose mode for BnB
-mex_flag=1; % use matlab mex code for acceleration
+mex_flag=0; % use matlab mex code for acceleration
 branch_reso = pi/256; % terminate bnb when branch size <= branch_reso
 sample_reso = pi/256; % resolution for interval analysis
 % set threshold
