@@ -269,35 +269,42 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
       auto [phi_far, phi_near] = interval_projection(outer_angle[1], range_phi);
       auto [alpha_far, alpha_near] =
           interval_projection(outer_angle[0], range_alpha);
-
+      bool is_north = range_alpha.lower <= M_PI_2 && range_alpha.upper<=M_PI_2;
+      bool is_south = !is_north;
       // Maximum calculation
       double maximum = 0;
       double delta_phi_near = std::abs(phi_near - outer_angle[1]);
-      if (delta_phi_near == 0) {
+      if (abs(outer_alpha-M_PI_2)<1e-5 && ( is_north|| is_south) ){
+        if ((delta_phi_near<=M_PI_2&& is_north) ||(delta_phi_near>M_PI_2&& is_south)){
+            maximum = outer_product.dot(polar_2_xyz(range_alpha.upper,phi_near));
+        }else{
+            maximum = outer_product.dot(polar_2_xyz(range_alpha.lower,phi_near));
+        }
+      } else if (delta_phi_near == 0) {
         maximum = outer_product.dot(polar_2_xyz(alpha_near, phi_near));
-      } else if (delta_phi_near > M_PI / 2) {
+      } else if (delta_phi_near > M_PI_2) {
         double tangent = std::tan(outer_angle[0]) * std::cos(delta_phi_near);
-        double max_alpha = (tangent > 1e8) ? M_PI / 2 : std::atan(tangent);
+        double max_alpha = (tangent > 1e8) ? M_PI_2 : std::atan(tangent);
         if (max_alpha < 0)
           max_alpha += M_PI;
 
         max_alpha = (max_alpha <= range_alpha.center) ? range_alpha.upper
                                                       : range_alpha.lower;
         maximum = outer_product.dot(polar_2_xyz(max_alpha, phi_near));
-      } else if (delta_phi_near < M_PI / 2 && outer_angle[0] < M_PI / 2 &&
+      } else if (delta_phi_near < M_PI_2 && outer_angle[0] < M_PI_2 &&
                  range_alpha.lower >= outer_angle[0]) {
         maximum = outer_product.dot(polar_2_xyz(range_alpha.lower, phi_near));
-      } else if (delta_phi_near < M_PI / 2 && outer_angle[0] > M_PI / 2 &&
+      } else if (delta_phi_near < M_PI_2 && outer_angle[0] > M_PI_2 &&
                  range_alpha.lower <= M_PI - outer_angle[0]) {
         maximum = outer_product.dot(polar_2_xyz(range_alpha.upper, phi_near));
-      } else if (delta_phi_near == M_PI / 2) {
+      } else if (delta_phi_near == M_PI_2) {
         maximum =
-            (outer_angle[0] <= M_PI / 2)
+            (outer_angle[0] <= M_PI_2)
                 ? outer_product.dot(polar_2_xyz(range_alpha.lower, phi_near))
                 : outer_product.dot(polar_2_xyz(range_alpha.upper, phi_near));
       } else {
         double tangent = std::tan(outer_angle[0]) * std::cos(delta_phi_near);
-        double max_alpha = (tangent > 1e8) ? M_PI / 2 : std::atan(tangent);
+        double max_alpha = (tangent > 1e8) ? M_PI_2 : std::atan(tangent);
         if (max_alpha < 0)
           max_alpha += M_PI;
         if (max_alpha <= range_alpha.lower) {
@@ -313,32 +320,38 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
       double minimum = 0;
       double delta_phi_far = std::abs(phi_far - outer_angle[1]);
       // ... 类似maximum的计算逻辑
-      if (delta_phi_far < M_PI / 2) {
+      if (abs(outer_alpha-M_PI_2)<1e-5 && ( is_north|| is_south) ){
+        if ((delta_phi_near<=M_PI_2&& is_north) ||(delta_phi_near>M_PI_2&& is_south)){
+            minimum = outer_product.dot(polar_2_xyz(range_alpha.lower,phi_far));
+        }else{
+            minimum = outer_product.dot(polar_2_xyz(range_alpha.upper,phi_far));
+        }
+      } else if (delta_phi_far < M_PI_2) {
         double tangent = std::tan(outer_angle[0]) * std::cos(delta_phi_far);
-        double min_alpha = (tangent > 1e8) ? M_PI / 2 : std::atan(tangent);
+        double min_alpha = (tangent > 1e8) ? M_PI_2 : std::atan(tangent);
         if (min_alpha < 0)
           min_alpha += M_PI;
 
         if (min_alpha <=
             range_alpha.center) { // sum(range_alpha)/2 用center代替
-          minimum = outer_product.dot(polar_2_xyz(range_alpha.lower, phi_far));
-        } else {
           minimum = outer_product.dot(polar_2_xyz(range_alpha.upper, phi_far));
+        } else {
+          minimum = outer_product.dot(polar_2_xyz(range_alpha.lower, phi_far));
         }
-      } else if (delta_phi_far > M_PI / 2 && outer_angle[0] < M_PI / 2 &&
+      } else if (delta_phi_far > M_PI_2 && outer_angle[0] < M_PI_2 &&
                  range_alpha.upper <= (M_PI - outer_angle[0])) {
         minimum = outer_product.dot(polar_2_xyz(range_alpha.upper, phi_far));
-      } else if (delta_phi_far > M_PI / 2 && outer_angle[0] > M_PI / 2 &&
+      } else if (delta_phi_far > M_PI_2 && outer_angle[0] > M_PI_2 &&
                  range_alpha.lower >= (M_PI - outer_angle[0])) {
         minimum = outer_product.dot(polar_2_xyz(range_alpha.lower, phi_far));
-      } else if (delta_phi_far == M_PI / 2) {
+      } else if (delta_phi_far == M_PI_2) {
         minimum =
-            (outer_angle[0] <= M_PI / 2)
+            (outer_angle[0] <= M_PI_2)
                 ? outer_product.dot(polar_2_xyz(range_alpha.upper, phi_far))
                 : outer_product.dot(polar_2_xyz(range_alpha.lower, phi_far));
       } else {
         double tangent = std::tan(outer_angle[0]) * std::cos(delta_phi_far);
-        double min_alpha = (tangent > 1e8) ? M_PI / 2 : std::atan(tangent);
+        double min_alpha = (tangent > 1e8) ? M_PI_2 : std::atan(tangent);
 
         if (min_alpha < 0)
           min_alpha += M_PI;
