@@ -65,7 +65,7 @@ else % cube_width > sample_resolution
         else
             flag =-1;
         end
-        if range_phi(1) <= pi
+        if range_phi(1) <= pi&& range_phi(2)<=pi
             outer_alpha = line_pair.outer_east(i,1);
             outer_phi = line_pair.outer_east(i,2);
             x =line_pair.vector_outer_east(i,:);
@@ -76,10 +76,17 @@ else % cube_width > sample_resolution
         end
         [phi_far,phi_near]     = interval_projection(outer_phi,range_phi);
         [alpha_far,alpha_near] = interval_projection(outer_alpha,range_alpha);
-
+        is_north = range_alpha(1) <= pi/2 && range_alpha(2)<=pi/2;
+        is_south = ~is_north;
         %%% find_maximum
         delta_phi_near = abs(phi_near - outer_phi);
-        if delta_phi_near ==0
+        if abs(outer_alpha-pi/2)<1e-5 && (range_alpha(1)>=pi/2 || range_alpha(2)<=pi/2)
+            if (delta_phi_near<=pi/2&& is_north) ||(delta_phi_near>pi/2&& is_south)
+                maximum = dot(x,polar_2_xyz(range_alpha(2),phi_near));
+            else
+                maximum = dot(x,polar_2_xyz(range_alpha(1),phi_near));
+            end
+        elseif delta_phi_near ==0
             maximum = dot(x,polar_2_xyz(alpha_near,phi_near));
         elseif delta_phi_near>pi/2
             tangent = tan(outer_alpha)*cos(delta_phi_near);
@@ -126,7 +133,13 @@ else % cube_width > sample_resolution
         end
         %%% find_minimum
         delta_phi_far = abs(phi_far - outer_phi);
-        if delta_phi_far <pi/2
+        if abs(outer_alpha-pi/2)<1e-5 && (range_alpha(1)>=pi/2 || range_alpha(2)<=pi/2)
+            if  (delta_phi_far<=pi/2 && is_north) ||(delta_phi_far>pi/2&& is_south)
+                minimum = dot(x,polar_2_xyz(range_alpha(1),phi_far));
+            else
+                minimum = dot(x,polar_2_xyz(range_alpha(2),phi_far));
+            end
+        elseif delta_phi_far <pi/2
             tangent = tan(outer_alpha)*cos(delta_phi_far);
             if tangent>1e8
                 min_alpha = pi/2;
@@ -137,9 +150,9 @@ else % cube_width > sample_resolution
                 end
             end
             if min_alpha<=sum(range_alpha)/2
-                minimum = dot(x,polar_2_xyz(range_alpha(1),phi_far));
-            else
                 minimum = dot(x,polar_2_xyz(range_alpha(2),phi_far));
+            else
+                minimum = dot(x,polar_2_xyz(range_alpha(1),phi_far));
             end
 
         elseif delta_phi_far >pi/2 && outer_alpha <pi/2 && range_alpha(2)<=pi-outer_alpha

@@ -1,15 +1,9 @@
-The code is still under construction, the full-package will be released in April, stay tuned！
+The code is still under construction, the full-package will be released in May, stay tuned！
 # SCORE:Saturated Consensus Relocalization in Semantic Line Maps
 This is the github repository for our IROS2025 paper. 
 The paper is under review, we provide the arxiv version here:
 https://arxiv.org/pdf/2503.03254
-If you find our work helpful, please cite:
-@article{jiang2025score,
-  title={SCORE: Saturated Consensus Relocalization in Semantic Line Maps},
-  author={Jiang, Haodong and Zheng, Xiang and Zhang, Yanglin and Zeng, Qingcheng and Li, Yiqian and Hong, Ziyang and Wu, Junfeng},
-  journal={arXiv preprint arXiv:2503.03254},
-  year={2025}
-}
+
 ## 1. Matlab Implementation for FGO-PnL solver and Examples
 
 ## 2. Cpp parallel Implementation for FGO-PnL solver and Examples
@@ -138,4 +132,14 @@ python generate_tag_des.py --text_file xxxx.txt
 # your also need to prepare the txt file for the object id and object name mapping with the format `object_id object_name`, and its name should be `xxx_index.txt`
 # please reference `data/689fec23d7_index.txt` for the format
 python ram_ground_sam_openset.py --des_file xxx.json --image-dir xxx --output-dir xxx
+```
+## Citation
+If you find our work helpful, please cite:
+```
+@article{jiang2025score,
+  title={SCORE: Saturated Consensus Relocalization in Semantic Line Maps},
+  author={Jiang, Haodong and Zheng, Xiang and Zhang, Yanglin and Zeng, Qingcheng and Li, Yiqian and Hong, Ziyang and Wu, Junfeng},
+  journal={arXiv preprint arXiv:2503.03254},
+  year={2025}
+}
 ```
