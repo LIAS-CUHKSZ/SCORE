@@ -11,41 +11,41 @@ import pyelsed
 import numpy as np
 from sklearn.cluster import KMeans
 # parameters for line_extractor_pt1
-params_2d = {
+params_2D = {
     # for parallel computing
     "thread_number": 32,                                 
-    # for 2d line extractor
+    # for 2D line extractor
     "sigma": 1,
-    "gradientThreshold": 35,                 # tune this to filter weak 2D lines
+    "gradientThreshold": 30,                 # tune this to filter weak 2D lines
     "minLineLen": 150,                       # tune this to filer short 2D lines            
     "lineFitErrThreshold": 0.2,
     "pxToSegmentDistTh": 1.5,
     "validationTh": 0.15,
     "validate": True,
     "treatJunctions": True,
-    # for 2d line merging
-    "pix_dis_thresh": 120,                    # tune this to filter nearby 2D lines
-    "parallel_thres_2d": np.cos(3*np.pi/180), 
-    # for 3d line regression
+    # for 2D line filtering
+    "pix_dis_thresh": 100,                    # tune this to filter nearby 2D lines
+    "parallel_thres_2D": np.cos(3*np.pi/180), 
+    # for 3D line regression
     "background_depth_diff_thresh": 0.2,     # tune this to threshold the depth leap between fore- and back-ground points 
     "line_points_num_thresh": 66,            # tune this to threshold the minimal number required to regress a reliable 3D line
     "perturb_length": 12,                    # tune this to adjust the perturbation 
-     "num_hypo":6,                            # tune this to adjust the hypothesis number
+    "num_hypo":6,                            # tune this to adjust the hypothesis number
 }
 
 # parameters for line_extractor_pt2
-params_3d = {
+params_3D = {
     # for parallel computing
     "thread_number": 32,                                 
-    # for 3d line merging
-    "parrallel_thresh_3d":np.cos(2*np.pi/180), # tune this
-    "overlap_thresh_3d": 0.05,                  # tune this
-    # for 3d line pruning
-    "degree_threshold": 1,                       # tune this
+    # for 3D line merging
+    "parrallel_thresh_3D":np.cos(2*np.pi/180), # tune this
+    "overlap_thresh_3D": 0.02,                  # tune this
+    # for 3D line pruning
+    "degree_threshold": 0,                       # tune this
 }
 
 def extract_dominant_label(y,x,obj_ids,obj_id_label_id):
-    ### get the (dominant) semantic label for this 2d line
+    ### get the (dominant) semantic label for this 2D line
     all_points_obj_ids = obj_ids[y, x]
     all_points_semantic_label = []
     for point_obj_id in all_points_obj_ids:
@@ -53,10 +53,10 @@ def extract_dominant_label(y,x,obj_ids,obj_id_label_id):
     all_points_semantic_label = np.array(all_points_semantic_label)
     unique_labels, counts = np.unique(all_points_semantic_label, return_counts=True)
     semantic_label = 0
-    if np.max(counts) > params_2d["line_points_num_thresh"]:
+    if np.max(counts) > params_2D["line_points_num_thresh"]:
         # get the most frequent label
         semantic_label = unique_labels[np.argmax(counts)] 
-    # frequent_labels = unique_labels[counts > params_2d["line_points_num_thresh"]]
+    # frequent_labels = unique_labels[counts > params_2D["line_points_num_thresh"]]
     # semantic_label = 0
     # for label in frequent_labels:
     #     semantic_label = 0
@@ -69,30 +69,30 @@ def extract_dominant_label(y,x,obj_ids,obj_id_label_id):
     return semantic_label
 
 def get_line_eq(x0, y0, x1, y1):
-    # derive 2d line paramaters from two endpoints
+    # derive 2D line paramaters from two endpoints
     m = (y1 - y0) / (x1 - x0)
     c = y0 - m * x0
     return m, c
 
-def extract_and_prune_2dlines(rgb):
-    # extract 2d lines using ELSED
+def extract_and_prune_2Dlines(rgb):
+    # extract 2D lines using ELSED
     segments, scores = pyelsed.detect(
         rgb,
-        sigma=params_2d["sigma"],
-        gradientThreshold=params_2d["gradientThreshold"],
-        minLineLen=params_2d["minLineLen"],
-        lineFitErrThreshold=params_2d["lineFitErrThreshold"],
-        pxToSegmentDistTh=params_2d["pxToSegmentDistTh"],
-        validationTh=params_2d["validationTh"],
-        validate=params_2d["validate"],
-        treatJunctions=params_2d["treatJunctions"],
+        sigma=params_2D["sigma"],
+        gradientThreshold=params_2D["gradientThreshold"],
+        minLineLen=params_2D["minLineLen"],
+        lineFitErrThreshold=params_2D["lineFitErrThreshold"],
+        pxToSegmentDistTh=params_2D["pxToSegmentDistTh"],
+        validationTh=params_2D["validationTh"],
+        validate=params_2D["validate"],
+        treatJunctions=params_2D["treatJunctions"],
     )
     # regulate data format
     for j, segment in enumerate(segments):
         x1, y1, x2, y2 = segment
         if x2 < x1:
             segments[j] = x2, y2, x1, y1
-    # prune proximate parallel 2d lines
+    # prune proximate parallel 2D lines
     sorted_index = np.argsort(scores)[::-1]
     segments = segments[sorted_index]
     scores = scores[sorted_index]
@@ -107,11 +107,11 @@ def extract_and_prune_2dlines(rgb):
             x3, y3, x4, y4 = segments[k]
             vk = np.array([x4 - x3, y4 - y3]).reshape(1,2)
             vk = vk / np.linalg.norm(vk)
-            if abs(vj @ vk.T) > params_2d["parallel_thres_2d"]:
+            if abs(vj @ vk.T) > params_2D["parallel_thres_2D"]:
                 pixel_diff = np.array([np.array([x1 - x3, y1 - y3]), np.array([x1 - x4, y1 - y4]), np.array([x2 - x3, y2 - y3]), np.array([x2 - x4, y2 - y4])])
                 project_diff = project_matrix @ pixel_diff.T
                 project_dis = np.linalg.norm(project_diff, axis=0)
-                proximate_line_flag = min(project_dis) < params_2d["pix_dis_thresh"]
+                proximate_line_flag = min(project_dis) < params_2D["pix_dis_thresh"]
                 sig_dim = np.argmax(abs(vj))
                 # uncomment this if you want to keep disconnected segments on a same line
                 # if sig_dim == 0:
@@ -126,7 +126,7 @@ def extract_and_prune_2dlines(rgb):
             else:
                 k += 1
         j += 1 
-        # draw 2d lines and output images
+        # draw 2D lines and output images
     return segments
 
 def get_foreground_points(valid_z):
@@ -142,12 +142,12 @@ def get_foreground_points(valid_z):
     if len(np.unique(kmeans.labels_))==1:
         return foreground_idx,depth_mean,background_flag   
     # the points have distinct depth
-    if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2d["background_depth_diff_thresh"]:
+    if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2D["background_depth_diff_thresh"]:
         # there is a depth leap between two clusters
         depth_mean=centers[1][0]
         foreground_idx = np.where(kmeans.labels_ == 1)[0]
         background_flag=True
-    if  centers[1]>centers[0] and min(depth_cluster_1)-max(depth_cluster_0) > params_2d["background_depth_diff_thresh"]:
+    if  centers[1]>centers[0] and min(depth_cluster_1)-max(depth_cluster_0) > params_2D["background_depth_diff_thresh"]:
         # there is a depth leap between two clusters
         depth_mean=centers[0][0]
         foreground_idx = np.where(kmeans.labels_ == 0)[0]
@@ -156,7 +156,7 @@ def get_foreground_points(valid_z):
 
 def perturb_and_extract(x,y,render_depth,v,num_hypo):
     # perturb the 2D line and extract different 3D points
-    move_length_list = np.linspace(-1,1,num_hypo)*params_2d["perturb_length"]
+    move_length_list = np.linspace(-1,1,num_hypo)*params_2D["perturb_length"]
     background_flag = []
     depth_mean = []
     xyz_list = []
@@ -186,16 +186,21 @@ def perturb_and_extract(x,y,render_depth,v,num_hypo):
         valid_y = y_perturbed[np.where(z_perturbed != 0)]
         xyz_list.append(np.concatenate([valid_x[:, None], valid_y[:, None], valid_z[:, None]], axis=1))
         foreground_idx = list(range(len(valid_z)))
-        if len(valid_z)>params_2d["line_points_num_thresh"]:
+        if len(valid_z)>params_2D["line_points_num_thresh"]:
             foreground_idx,depth_mean[k],background_flag[k] = get_foreground_points(valid_z)
         foreground_idices.append(foreground_idx)
     return depth_mean,xyz_list,foreground_idices,background_flag
 
-def calculate_error(n_j_pixel,v,intrinsic_matrix,pose_matrix,p):
+def calculate_error(n_j_pixel,v,intrinsic_matrix,pose_matrix,point_a,point_b):
     # calculate the geometric error using pose data
     n_j_camera = n_j_pixel @ intrinsic_matrix
     n_j_camera = n_j_camera / np.linalg.norm(n_j_camera)
     n_j_camera = n_j_camera.reshape(3,1)
     error_rot = (pose_matrix[:3, :3] @ n_j_camera).T @ v
-    error_trans = (p.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
+    error_trans_a = (point_a.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
+    error_trans_b = (point_b.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
+    if np.sign(error_trans_a) != np.sign(error_trans_b):
+        error_trans = 0.0001
+    else:
+        error_trans = np.min([np.abs(error_trans_a),np.abs(error_trans_b)])
     return error_rot, error_trans

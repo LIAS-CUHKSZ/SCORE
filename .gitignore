@@ -18,3 +18,4 @@ csv_dataset/**/*.mat
 matlab/FGO_PnL/codegen/*
 **/*.prj
 matlab/debug/*
+dataset/*
