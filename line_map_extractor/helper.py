@@ -16,21 +16,21 @@ params_2d = {
     "thread_number": 32,                                 
     # for 2d line extractor
     "sigma": 1,
-    "gradientThreshold": 35,                 # tune this to filter weak 2D lines
+    "gradientThreshold": 30,                 # tune this to filter weak 2D lines
     "minLineLen": 150,                       # tune this to filer short 2D lines            
     "lineFitErrThreshold": 0.2,
     "pxToSegmentDistTh": 1.5,
     "validationTh": 0.15,
     "validate": True,
     "treatJunctions": True,
-    # for 2d line merging
-    "pix_dis_thresh": 120,                    # tune this to filter nearby 2D lines
+    # for 2d line filtering
+    "pix_dis_thresh": 100,                    # tune this to filter nearby 2D lines
     "parallel_thres_2d": np.cos(3*np.pi/180), 
     # for 3d line regression
     "background_depth_diff_thresh": 0.2,     # tune this to threshold the depth leap between fore- and back-ground points 
     "line_points_num_thresh": 66,            # tune this to threshold the minimal number required to regress a reliable 3D line
     "perturb_length": 12,                    # tune this to adjust the perturbation 
-     "num_hypo":6,                            # tune this to adjust the hypothesis number
+    "num_hypo":6,                            # tune this to adjust the hypothesis number
 }
 
 # parameters for line_extractor_pt2
@@ -38,10 +38,10 @@ params_3d = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3d line merging
-    "parrallel_thresh_3d":np.cos(2*np.pi/180), # tune this
-    "overlap_thresh_3d": 0.05,                  # tune this
+    "parrallel_thresh_3d":np.cos(1*np.pi/180), # tune this
+    "overlap_thresh_3d": 0.01,                  # tune this
     # for 3d line pruning
-    "degree_threshold": 1,                       # tune this
+    "degree_threshold": 0,                       # tune this
 }
 
 def extract_dominant_label(y,x,obj_ids,obj_id_label_id):

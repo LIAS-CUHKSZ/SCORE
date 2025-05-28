@@ -37,7 +37,7 @@ rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
 depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
 rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
-depth_img_list= depth_img_list[::3] #downsample
+depth_img_list= depth_img_list[::2] #downsample
 # remove the depth images that do not have corresponding rgb images
 k = 0
 while(k<len(depth_img_list)):
@@ -205,9 +205,9 @@ def process_file(depth_img_name):
         ### regress the 3D line with found foreground points
         points_2d = np.concatenate([foreground_x[:, None], foreground_y[:, None], np.ones_like(foreground_x)[:, None]], axis=1)
         points_camera_3d = (np.linalg.inv(intrinsic) @ (points_2d * foreground_z[:, None]).T).T # get 3D points in the camera frame
+        # transform to the world frame
         points_world_3d = (
-            pose_matrix @ np.concatenate([points_camera_3d, np.ones((points_camera_3d.shape[0], 1))], axis=1).T
-        ) # transform to the world frame
+            pose_matrix @ np.concatenate([points_camera_3d, np.ones((points_camera_3d.shape[0], 1))], axis=1).T) 
         points_world_3d = points_world_3d[:3, :].T
         try:
             model_robust, inliers = ransac(
@@ -220,22 +220,20 @@ def process_file(depth_img_name):
         if np.size(inlier_index) < helper.params_2d["line_points_num_thresh"]:
             continue
         # obtain and store 3D line paramaters
-        v = model_robust.params[1]
+        p,v = model_robust.params[0:2]
         sig_dim = np.argmax(abs(v))
         inlier_points = points_world_3d[inlier_index]
-        min_index = np.argmin(inlier_points[:, sig_dim])
-        max_index = np.argmax(inlier_points[:, sig_dim])
-        point_min,point_max = inlier_points[[min_index,max_index]]
-        # regulate the vector v if it is close to the x, y or z axis
+        min_val = np.min(inlier_points[:, sig_dim])
+        max_val = np.max(inlier_points[:, sig_dim])
+        # regulate the vector v if it is close to principle axis
         if np.abs(np.dot(v, np.array([1, 0, 0]))) > 0.995:
             v = np.array([1, 0, 0])
         elif np.abs(np.dot(v, np.array([0, 1, 0]))) > 0.995:
             v = np.array([0, 1, 0])
         elif np.abs(np.dot(v, np.array([0, 0, 1]))) > 0.995:
             v = np.array([0, 0, 1])
-        p = (point_min+point_max)/2
-        point_min = p + np.outer(v,v)@(point_min - p)
-        point_max = p + np.outer(v,v)@(point_max - p)
+        point_min = p + v*(min_val-p[sig_dim])/v[sig_dim] 
+        point_max = p + v*(max_val-p[sig_dim])/v[sig_dim]
         line_3d_semantic_label.append(semantic_label)
         line_3d_end_points.append([point_min,point_max])
         line_3d_params.append([p,v])
@@ -294,12 +292,12 @@ scene_line_3d_image_source = []
 print(helper.params_2d["background_depth_diff_thresh"])
 results=[]
 ## unparalled code to process files
-# for depth_img_name  in tqdm(depth_img_list):
-        # result = process_file(depth_img_name)
-        # results.append(result)
+for depth_img_name  in tqdm(depth_img_list):
+        result = process_file(depth_img_name)
+        results.append(result)
 
 # parallel code to process files
-results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(depth_img_name) for depth_img_name in depth_img_list)
+# results = Parallel(n_jobs=helper.params_2d["thread_number"])(delayed(process_file)(depth_img_name) for depth_img_name in depth_img_list)
 
 # 
 for result in results:
