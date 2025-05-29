@@ -19,3 +19,4 @@ matlab/FGO_PnL/codegen/*
 **/*.prj
 matlab/debug/*
 dataset/*
+/**/backup/

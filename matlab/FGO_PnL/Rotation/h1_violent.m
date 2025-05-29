@@ -40,10 +40,10 @@ for n =1:N
         alpha_u = line_pair.outer_west(n,1); phi_u = line_pair.outer_west(n,2);
     end
     if alpha_l>=branch(1) && alpha_l<=branch(3) && phi_l>=branch(2) && phi_l<=branch(4)
-        l_ = -1;
+        l_ = -line_pair.outer_norm(n);
     end
     if alpha_u>=branch(1) && alpha_u<=branch(3) && phi_u>=branch(2) && phi_u<=branch(4)
-        u_ = 1;
+        u_ = line_pair.outer_norm(n);
     end
     for m=1:MM
         axis = polar_2_xyz(boundary(1,m),boundary(2,m));

@@ -42,7 +42,7 @@ end
 %%% calculate upper bound based on rigoros interval anlaysis
 % obtain the interval for each matched pair
 % calculate the extreme values for the h1 and h2 function
-% [h1_upper,h1_lower] = h1_interval_mapping(line_pair,Branch,sample_resolution);
+% [h1_upper_,h1_lower_] = h1_interval_mapping(line_pair,Branch,sample_resolution);
 [h1_upper,h1_lower]=h1_violent(line_pair,Branch,sample_resolution);
 % if sum(abs(h1_upper_-h1_upper))>0.01
 %     h1_upper_'

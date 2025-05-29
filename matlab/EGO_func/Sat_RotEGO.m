@@ -1,6 +1,5 @@
 %%%%
-% Implementation of the FGO rotation estimator under saturated consensus maximization
-
+% wrap EGO rotation estimator with the same BnB framework as our method.
 %%% Inputs:
 % vector_n: N x 3, the normal vector paramater for each 2D image line.
 % vector_v: N x 3, the direction vector for each matched 3D map line.
@@ -11,9 +10,6 @@
 % sample_reso: scalar, control resolution for interval analysis.
 % prox_thres:  double, the candidates are not proximate to each other.
 % verbose_flag: bool, set true for detailed bnb process info.
-% mex_flag: bool, set true to use mex code for acceleration.
-
-
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
@@ -21,7 +17,7 @@
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,id,kernel_buffer,branch_reso,epsilon_r,sample_reso,prox_thres,verbose_flag,mex_flag)
+function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotEGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,prox_thres,verbose_flag)
 %%% data pre-process
 line_pair_data = data_process(vector_n,vector_v);
 %%%%%%%%%%%%%%%%%%%%% Acclerated BnB %%%%%%%%%%%%%%%%%%%%%
@@ -30,13 +26,8 @@ tic
 % calculate bounds for east and west semispheres.
 branch=[];
 B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
-if mex_flag
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
-else
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,id,kernel_buffer);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,id,kernel_buffer);
-end
+[upper_east,lower_east,theta_east]=get_bounds_sat(vector_v',vector_n',B_east,epsilon_r,ids,kernel_buff);    
+[upper_west,lower_west,theta_west]=get_bounds_sat(vector_v',vector_n',B_west,epsilon_r,ids,kernel_buff);    
 branch=[branch,[B_east;upper_east;lower_east]];
 branch=[branch,[B_west;upper_west;lower_west]];
 % record the current best estimate according to the lower bounds
@@ -63,11 +54,7 @@ iter=1;
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        if mex_flag
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO_mex(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
-        else
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,id,kernel_buffer);
-        end
+        [new_upper(i),new_lower(i),new_theta_lower{i}]=get_bounds_sat(line_pair_data.vector_v',line_pair_data.vector_n',new_branch(:,i),epsilon_r,ids,kernel_buff);
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end

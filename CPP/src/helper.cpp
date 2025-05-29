@@ -121,7 +121,7 @@ Vector2d xyz_2_polar(Vector3d xyz) {
     polar(1) = 0;
     polar(0) = acos(xyz(2));
   } else if (xyz(0) == 0) {
-    polar(1) = M_PI / 2;
+    polar(1) = xyz(1)<0 ? M_PI+M_PI_2: M_PI_2;
     polar(0) = acos(xyz(2));
   } else {
     polar(1) = atan2(xyz(1), xyz(0));
