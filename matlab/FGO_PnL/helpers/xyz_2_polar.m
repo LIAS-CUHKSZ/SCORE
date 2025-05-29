@@ -5,7 +5,7 @@ function [alpha,phi] = xyz_2_polar(axis)
         phi =0;
         return;
     else 
-        axis = axis/length;
+        axis = axis/length;   %normalization
     end
     if axis(1)==0 && axis(2)==0
         phi = 0;
