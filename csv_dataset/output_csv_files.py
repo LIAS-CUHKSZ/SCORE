@@ -30,29 +30,28 @@ for i in range(0,len(scene_list)):
     poses_all = data['scene_pose']
     intrinsics_all = data['scene_intrinsic']
     #
-    merged_line_3d_params = data['merged_scene_line_3d_params']
-    merged_line_3d_semantic_labels = data['merged_scene_line_3d_semantic_labels']
-    merged_line_3d_endpoints= data['merged_scene_line_3d_end_points']
+    merged_line_3D_semantic_labels = data['merged_scene_line_3D_semantic_labels']
+    merged_line_3D_endpoints= data['merged_scene_line_3D_end_points']
     # 
-    scene_line_2d_params = data['scene_line_2d_params']
-    scene_line_2d_semantic_labels = data['scene_line_2d_semantic_labels']
-    scene_line_2d_match_idx_updated = data['scene_line_2d_match_idx_updated']
-    line_2d_points = data['scene_line_2d_end_points']
+    scene_line_2D_params = data['scene_line_2D_params']
+    scene_line_2D_semantic_labels = data['scene_line_2D_semantic_labels']
+    scene_line_2D_match_idx_updated = data['scene_line_2D_match_idx_updated']
+    line_2D_points = data['scene_line_2D_end_points']
     scene_projection_error_r = data['scene_projection_error_r']
     scene_projection_error_t = data['scene_projection_error_t']
     ### save path
     base_path = root_dir+f"/SCORE/csv_dataset/"+scene_id+"/"
     pose_folder = base_path+"poses/"
     intrinsic_folder = base_path+"intrinsics/"
-    line2d_folder = base_path+"lines2d/"
+    line2D_folder = base_path+"lines2D/"
 
-    for folder in [pose_folder,intrinsic_folder,line2d_folder]:
+    for folder in [pose_folder,intrinsic_folder,line2D_folder]:
         if not os.path.exists(folder):
             os.makedirs(folder)
 
     ### process images one bye one
-    while(len(scene_line_2d_semantic_labels)>0):
-        frame_name,frame_semantics_label = scene_line_2d_semantic_labels.popitem()
+    while(len(scene_line_2D_semantic_labels)>0):
+        frame_name,frame_semantics_label = scene_line_2D_semantic_labels.popitem()
         num_lines = len(frame_semantics_label)
         # store the pose and camera intrinsic for the cur image
         pose_this_frame = poses_all[frame_name] 
@@ -67,33 +66,31 @@ for i in range(0,len(scene_list)):
         df_intrinsic.to_csv(intrinsic_folder+frame_name+'.csv', index=False)  
         projection_error_r = scene_projection_error_r[frame_name]
         projection_error_t = scene_projection_error_t[frame_name]
-        lines_2d_thisframe = np.empty([num_lines,11],dtype=float) # used to store 2D line paramaters
+        lines_2D_thisframe = np.empty([num_lines,11],dtype=float) # used to store 2D line paramaters
         
         for j in range(0,num_lines):
             # normal(3x1), semantic (1), endpoint a(2x1), endpoint b(2x1), matched 3D line idx(1), proj_err(2)
-            lines_2d_thisframe[j][0:3] = scene_line_2d_params[frame_name][j]
-            lines_2d_thisframe[j][3] = frame_semantics_label[j]
-            lines_2d_thisframe[j][4:6] = line_2d_points[frame_name][j][0]
-            lines_2d_thisframe[j][6:8] = line_2d_points[frame_name][j][1]
-            lines_2d_thisframe[j][8] = scene_line_2d_match_idx_updated[frame_name][j]
-            lines_2d_thisframe[j][9] = projection_error_r[j]
-            lines_2d_thisframe[j][10] = projection_error_t[j]
-        df_2d = pd.DataFrame(lines_2d_thisframe, columns=['A','B','C','semantic_label','ua','va','ub','vb','matched_3d_line_idx','err_r','err_t'])
-        df_2d.to_csv(line2d_folder+frame_name+'2dlines.csv', index=False)
+            lines_2D_thisframe[j][0:3] = scene_line_2D_params[frame_name][j]
+            lines_2D_thisframe[j][3] = frame_semantics_label[j]
+            lines_2D_thisframe[j][4:6] = line_2D_points[frame_name][j][0]
+            lines_2D_thisframe[j][6:8] = line_2D_points[frame_name][j][1]
+            lines_2D_thisframe[j][8] = scene_line_2D_match_idx_updated[frame_name][j]
+            lines_2D_thisframe[j][9] = projection_error_r[j]
+            lines_2D_thisframe[j][10] = projection_error_t[j]
+        df_2D = pd.DataFrame(lines_2D_thisframe, columns=['A','B','C','semantic_label','ua','va','ub','vb','matched_3D_line_idx','err_r','err_t'])
+        df_2D.to_csv(line2D_folder+frame_name+'_2Dlines.csv', index=False)
         print(frame_name+'data processed')
 
     ### process all 3D lines in the scene
-    num_3d_line = len(merged_line_3d_params)
-    # 3D line params: position(3x1), direction(3x1), semantic label(1), endpoint a(3x1), endpoint b(3x1), image_source
-    lines_3d_all = np.empty([num_3d_line,13],dtype=float) 
-    for i  in range(0,num_3d_line):
-        lines_3d_all[i][0:3] = merged_line_3d_params[i][0]
-        lines_3d_all[i][3:6] = merged_line_3d_params[i][1]
-        lines_3d_all[i][6] = merged_line_3d_semantic_labels[i]
-        lines_3d_all[i][7:10] = merged_line_3d_endpoints[i][0]
-        lines_3d_all[i][10:13] = merged_line_3d_endpoints[i][1]
-    df_3d = pd.DataFrame(lines_3d_all, columns=['x','y','z','vx','vy','vz','semantic_label','xa','ya','za','xb','yb','zb'])
-    df_3d.to_csv(base_path+'3dlines.csv', index=False)
+    num_3D_line = len(merged_line_3D_semantic_labels)
+    # 3D line params: endpoint a(3x1), endpoint b(3x1), semantic label(1)
+    lines_3D_all = np.empty([num_3D_line,7],dtype=float) 
+    for i  in range(0,num_3D_line):
+        lines_3D_all[i][0:3] = merged_line_3D_endpoints[i][0]
+        lines_3D_all[i][3:6] = merged_line_3D_endpoints[i][1]
+        lines_3D_all[i][6] = merged_line_3D_semantic_labels[i]
+    df_3D = pd.DataFrame(lines_3D_all, columns=['xa','ya','za','xb','yb','zb','semantic_label'])
+    df_3D.to_csv(base_path+'3Dlines.csv', index=False)
 
 
 
