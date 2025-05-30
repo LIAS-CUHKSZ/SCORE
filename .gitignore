@@ -20,3 +20,5 @@ matlab/FGO_PnL/codegen/*
 matlab/debug/*
 dataset/*
 /**/backup/
+scannetpp/outputs/*
+

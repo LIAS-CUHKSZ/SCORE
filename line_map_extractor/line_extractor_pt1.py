@@ -30,11 +30,12 @@ from scipy import stats
 
 
 ################################### Loading and Configuring ###################################
-root_dir = "/data1/home/lucky/ELSED"
+data_root_dir = "/data2/scannetppv2"
+output_root_dir = "/data1/home/lucky/IROS25/"
 scene_list = ["69e5939669","689fec23D7","c173f62b15","55b2bf8036"]
 scene_id = scene_list[2]
-rgb_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/rgb/"
-depth_image_folder = root_dir+f"/SCORE/dataset/{scene_id}/iphone/render_depth/"
+rgb_folder = data_root_dir+f"/data/{scene_id}/iphone/rgb/"
+depth_image_folder = data_root_dir+f"/data/{scene_id}/iphone/render_depth/"
 depth_img_list = sorted(glob.glob(depth_image_folder + "*.png"))
 rgb_img_list = sorted(glob.glob(rgb_folder + "*.jpg"))
 depth_img_list= depth_img_list[::2] #downsample
@@ -47,15 +48,15 @@ while(k<len(depth_img_list)):
         depth_img_list.remove(depth_img_name)
     else:
         k=k+1
-pose_file = root_dir+f"/SCORE/dataset/{scene_id}/iphone/pose_intrinsic_imu.json" # camera pose to world
-anno_file = root_dir+f"/SCORE/dataset/{scene_id}/scans/segments_anno.json"
-segments_file = root_dir+f"/SCORE/dataset/{scene_id}/scans/segments.json"
-instance_path = root_dir+f"/SCORE/dataset/{scene_id}/obj_ids/"
+pose_file = data_root_dir+f"/data/{scene_id}/iphone/pose_intrinsic_imu.json" # camera pose to world
+anno_file = data_root_dir+f"/data/{scene_id}/scans/segments_anno.json"
+segments_file = data_root_dir+f"/data/{scene_id}/scans/segments.json"
+instance_path = data_root_dir+f"/semantic_2D_iphone/obj_ids/{scene_id}/"
 ### result saving path
-dictionary_folder = root_dir+f"/SCORE/dictionary/{scene_id}/"
-line_image_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2D lines and labels
-line_mesh_raw_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3D lines
-line_data_folder = root_dir+f"/SCORE/line_map_extractor/out/{scene_id}/" # numpy file with all the extracted 2D lines and regressed 3D lines
+dictionary_folder = output_root_dir+f"SCORE/dictionary/{scene_id}/"
+line_image_folder = output_root_dir+f"SCORE/line_map_extractor/out/{scene_id}/rgb_line_image/"   # rgb images with extracted 2D lines and labels
+line_mesh_raw_folder = output_root_dir+f"SCORE/line_map_extractor/out/{scene_id}/line_mesh_raw/" # regressed 3D lines
+line_data_folder = output_root_dir+f"SCORE/line_map_extractor/out/{scene_id}/" # numpy file with all the extracted 2D lines and regressed 3D lines
 for out_path in [line_image_folder, line_mesh_raw_folder,dictionary_folder]:
     if not os.path.exists(out_path):
         os.makedirs(out_path)

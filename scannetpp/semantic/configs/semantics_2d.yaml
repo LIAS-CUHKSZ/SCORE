@@ -1,12 +1,12 @@
 ############### input data #################
 # release data downloaded to disk
-data_root: /data1/home/lucky/ELSED/dataset/data_selected
+data_root: /data1/home/lucky/ELSED/dataset
 
 scene_list: [55b2bf8036]
 filter_scenes: [55b2bf8036]
 
-rasterout_dir: /data1/home/lucky/ELSED/dataset/selected_raster_iphone
-visiblity_cache_dir: /data1/home/lucky/ELSED/dataset/selected_raster_visiblity_iphone
+rasterout_dir: /data1/home/lucky/ELSED/dataset/raster_iphone
+visiblity_cache_dir: /data1/home/lucky/ELSED/dataset/raster_visiblity_iphone
 exclude_scenes: []
 # image type - iphone or dslr
 image_type: iphone
@@ -31,7 +31,7 @@ obj_dist_thresh: 999
 bbox_expand_factor: 0.1
 ############### output #################
 save_dir_root: /data1/home/lucky/ELSED/dataset/
-save_dir: selected_semantic_2d_iphone
+save_dir: semantic_2d_iphone
 ############### dbg #################
 dbg:
   # viz obj ids in 2d for each image

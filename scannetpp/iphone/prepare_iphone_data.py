@@ -95,7 +95,7 @@ def main(args):
     # get the options to process
     # go through each scene
     for scene_id in tqdm(scene_ids, desc='scene'):
-        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root) / 'data_selected')
+        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root))
 
         if cfg.extract_rgb:
             extract_rgb(scene)

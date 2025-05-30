@@ -34,7 +34,7 @@ def main(args):
     output_dir = cfg.get("output_dir")
     if output_dir is None:
         # default to data folder in data_root
-        output_dir = Path(cfg.data_root) / "data_selected"
+        output_dir = Path(cfg.data_root) 
     output_dir = Path(output_dir)
 
     render_devices = []
@@ -46,7 +46,7 @@ def main(args):
     # go through each scene
     for scene_id in tqdm(scene_ids, desc="scene"):
         print(f"Processing scene {scene_id}")
-        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root) / "data_selected")
+        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root))
         render_engine = renderpy.Render()
         render_engine.setupMesh(str(scene.scan_mesh_path))
         for device in render_devices:

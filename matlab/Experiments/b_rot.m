@@ -29,14 +29,15 @@ Record_CM_EGO     =table('Size', [total_img, length(column_names)],'VariableType
 Record_SCM_EGO_clustered     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 %%
 %%%  params
-kernel_SCM = @(x) x^(-9);  % as a close approximation to @(x) 1-(x>1)
+% kernel_SCM = @(x) x^(-9);  % as a close approximation to @(x) 1-(x>1)
+kernel_SCM = @(x) 2^(-x+1);
 trunc_num=length(lines3D);
 kernel_buffer_SCM=zeros(trunc_num,1);
 kernel_buffer_CM = 1:1:trunc_num; kernel_buffer_CM = kernel_buffer_CM';
 for i=1:trunc_num
     kernel_buffer_SCM(i)=kernel_SCM(i);
 end
-prox_thres = 1*pi/180; % keep candidates which have a same score and not proximate to each other
+prox_thres = 2*pi/180; % keep candidates which have a same score and not proximate to each other
 verbose_flag=0; % verbose mode for BnB
 mex_flag=1; % use matlab mex code for acceleration
 branch_reso = pi/512; % terminate bnb when branch size <= branch_reso
@@ -88,9 +89,9 @@ parfor num =0:total_img
     [ids_cluster,n_2D_cluster,v_3D_cluster,~]=match_line(lines2D,lines3D_cluster);  % match with clustered 3D lines 
     %%%%%%%%%%%%%%%%%%% Estimate Orientation %%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%% CM %%%%%%%%%%%%%%%%%%%%
-    gt_inliers_idx = abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r;
-    gt_inliers_id = ids(gt_inliers_idx);
-    gt_score = calculate_score(gt_inliers_id,kernel_buffer_CM);
+    % gt_inliers_idx = abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r;
+    % gt_inliers_id = ids(gt_inliers_idx);
+    % gt_score = calculate_score(gt_inliers_id,kernel_buffer_CM);
     % % CM_FGO
     % [R_opt_top,best_score,num_candidate,time,~,~] = ...
     %     Sat_RotFGO(n_2D,v_3D,ids,kernel_buffer_CM,...
@@ -112,10 +113,9 @@ parfor num =0:total_img
     % [min_err,~]=min_error(num_candidate,R_opt_top,R_gt);
     % Record_SCM_FGO(num+1,:)={img_idx,M,epsilon_r,1-M/size(n_2D,1),min_err,num_candidate,best_score,gt_score,time};
     %%%%%%%%%%%%%%%%%%% clustered %%%%%%%%%%%%%%%%%%%%%%
-    % gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
-    % gt_inliers_id = ids_cluster(gt_inliers_idx);
-    % gt_score = calculate_score(gt_inliers_id,kernel_buffer_SCM);
-    % M=length(unique(gt_inliers_id));
+    gt_inliers_idx = find(abs(dot(R_gt'*v_3D_cluster',n_2D_cluster'))<=epsilon_r);
+    gt_inliers_id = ids_cluster(gt_inliers_idx);
+    gt_score = calculate_score(gt_inliers_id,kernel_buffer_SCM);
     % SCM_FGO_cluster
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
         Sat_RotFGO(n_2D_cluster,v_3D_cluster,ids_cluster,kernel_buffer_SCM,...

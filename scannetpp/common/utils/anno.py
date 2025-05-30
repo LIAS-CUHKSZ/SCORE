@@ -11,9 +11,9 @@ import torch
 from tqdm import tqdm
 import open3d as o3d
 
-from scannetpp.common.utils.colmap import camera_to_intrinsic, get_camera_images_poses
-from scannetpp.common.utils.dslr import compute_undistort_intrinsic, get_undistort_maps
-from scannetpp.common.utils.rasterize import undistort_rasterization, upsample_rasterization
+from common.utils.colmap import camera_to_intrinsic, get_camera_images_poses
+from common.utils.dslr import compute_undistort_intrinsic, get_undistort_maps
+from common.utils.rasterize import undistort_rasterization, upsample_rasterization
 
 def get_visiblity_from_cache(scene, raster_dir, cache_dir, image_type, subsample_factor, undistort_dslr=None, anno=None):
     cached_path = Path(cache_dir) / f'{scene.scene_id}.pth'

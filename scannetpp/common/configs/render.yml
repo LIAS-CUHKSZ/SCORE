@@ -9,8 +9,8 @@ render_dslr: False
 # splits: [nvs_sem_train, nvs_sem_val]
 
 # Specify scene ids if you want to render depth for specific scenes
-# scene_ids: [355e5e32db]
-scene_ids: [55b2bf8036]
+scene_ids: [c173f62b15]
+# scene_ids: [69e5939669]
 
 # The near and far planes for the depth camera during rendering in meters.
 near: 0.05

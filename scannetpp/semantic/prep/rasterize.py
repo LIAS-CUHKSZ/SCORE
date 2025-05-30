@@ -31,7 +31,7 @@ def adjust_intrinsic_matrix(intrinsic, factor):
 
 device = torch.device("cuda:0")
 
-@hydra.main(version_base=None, config_path="../configs", config_name="rasterize")
+@hydra.main(version_base=None, config_path="../../", config_name="merged_config")
 def main(cfg : DictConfig) -> None:
     print('Config:', cfg)
 
@@ -40,19 +40,19 @@ def main(cfg : DictConfig) -> None:
                    group=cfg.wandb_group, config=OmegaConf.to_container(cfg, resolve=True), notes=cfg.wandb_notes)
 
     # get scene list
-    scene_list = cfg.scene_list
-    print('Scenes in list:', len(scene_list))
+    scene_ids = cfg.scene_ids
+    print('Scenes in list:', len(scene_ids))
 
     if cfg.get('filter_scenes'):
-        scene_list = [s for s in scene_list if s in cfg.filter_scenes]
-        print('Filtered scenes:', len(scene_list))
+        scene_ids = [s for s in scene_ids if s in cfg.filter_scenes]
+        print('Filtered scenes:', len(scene_ids))
 
     # keep iphone and dslr data separate
     rasterout_dir = Path(cfg.rasterout_dir) / cfg.image_type
     rasterout_dir.mkdir(parents=True, exist_ok=True)
 
     # go through scenes
-    for scene_id in tqdm(scene_list, desc='scene'):
+    for scene_id in tqdm(scene_ids, desc='scene'):
         print(f'Rasterizing: {scene_id}')
         scene = ScannetppScene_Release(scene_id, data_root=cfg.data_root)
         # read mesh
