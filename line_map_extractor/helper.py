@@ -38,35 +38,25 @@ params_3D = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3D line merging
-    "parrallel_thresh_3D":np.cos(2*np.pi/180), # tune this
-    "overlap_thresh_3D": 0.02,                  # tune this
+    "parrallel_thresh_3D":np.cos(2.5*np.pi/180), # tune this
+    "overlap_thresh_3D": 0.025,                  # tune this
     # for 3D line pruning
-    "degree_threshold": 0,                       # tune this
+    "degree_threshold": 1,                       # tune this
 }
 
-def extract_dominant_label(y,x,obj_ids,obj_id_label_id):
+def extract_dominant_id(y,x,obj_ids,objId_id_dict):
     ### get the (dominant) semantic label for this 2D line
     all_points_obj_ids = obj_ids[y, x]
-    all_points_semantic_label = []
+    all_points_semantic_id = []
     for point_obj_id in all_points_obj_ids:
-        all_points_semantic_label.append(obj_id_label_id[point_obj_id])
-    all_points_semantic_label = np.array(all_points_semantic_label)
-    unique_labels, counts = np.unique(all_points_semantic_label, return_counts=True)
-    semantic_label = 0
+        all_points_semantic_id.append(objId_id_dict[point_obj_id])
+    all_points_semantic_id = np.array(all_points_semantic_id)
+    unique_ids, counts = np.unique(all_points_semantic_id, return_counts=True)
+    semantic_id = 0
     if np.max(counts) > params_2D["line_points_num_thresh"]:
         # get the most frequent label
-        semantic_label = unique_labels[np.argmax(counts)] 
-    # frequent_labels = unique_labels[counts > params_2D["line_points_num_thresh"]]
-    # semantic_label = 0
-    # for label in frequent_labels:
-    #     semantic_label = 0
-    #     if label == 0:
-    #         continue
-    #     else:
-    #         semantic_label = label_remapped[label-1]
-    #     if semantic_label != 0:
-    #         break
-    return semantic_label
+        semantic_id = unique_ids[np.argmax(counts)] 
+    return semantic_id
 
 def get_line_eq(x0, y0, x1, y1):
     # derive 2D line paramaters from two endpoints

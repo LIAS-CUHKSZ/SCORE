@@ -75,12 +75,16 @@ pip install -r line_map_extractor/requirements.txt
 ```
 #### Procedures 1&2 by running
 ``` bash
+# Remeber to revise variables data_root_dir and output_root_dir in the code
 python line_map_extractor/line_extractor_pt1.py
 ```
 
 #### Procedure 3 by running
 ``` bash
+# Construct the consistency graph 
 python line_map_extractor/line_extractor_pt2.py
+# Use previously contructed consistency graph
+python line_map_extractor/line_extractor_pt2.py -r y
 ```
 ### 
 ### Semantic Segmentation Pipeline combing RAM++ and Grounded-SAM
