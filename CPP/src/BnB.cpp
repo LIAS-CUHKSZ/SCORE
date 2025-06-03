@@ -210,7 +210,7 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
       } else {
         flag = -1;
       }
-      if (range_phi.lower <= M_PI) {
+      if (range_phi.lower <= M_PI && range_phi.upper <= M_PI) {
         outer_angle = init_line_pairs[i].attribute->angle_east_outer_product;
         outer_product = init_line_pairs[i].attribute->east_outer_product;
       } else {
@@ -258,7 +258,7 @@ pair<VectorXd, VectorXd> FGO_PnL::h1_bounds(Square &branch) {
       } else {
         flag = -1;
       }
-      if (range_phi.lower <= M_PI) {
+      if (range_phi.lower <= M_PI && range_phi.upper <= M_PI) {
         outer_angle = init_line_pairs[i].attribute->angle_east_outer_product;
         outer_product = init_line_pairs[i].attribute->east_outer_product;
       } else {

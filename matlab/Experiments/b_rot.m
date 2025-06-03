@@ -15,6 +15,15 @@ dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
 dataset_idx = dataset_ids(3);
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
+%%%% debug log   %%%%%%%
+diary_name  = 'log.txt';
+if exist(diary_name,'file')
+    delete(diary_name);
+end
+diary(diary_name);
+%%%%%%%%%%%%%%%%%
+
+%%% ..........
 
 %%% statistics
 total_img=1000;
@@ -39,12 +48,12 @@ for i=1:trunc_num
 end
 prox_thres = 2*pi/180; % keep candidates which have a same score and not proximate to each other
 verbose_flag=0; % verbose mode for BnB
-mex_flag=1; % use matlab mex code for acceleration
+mex_flag=0; % use matlab mex code for acceleration
 branch_reso = pi/512; % terminate bnb when branch size <= branch_reso
 sample_reso = pi/256; % resolution for interval analysis
 % set threshold
 line_num_thres=5; % minimal number of 2D lines required in the image
-parfor num =0:total_img
+for num =428:428
     img_idx=num*10;     
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
@@ -144,6 +153,10 @@ fprintf("SCM_FGO: %d \n",length(find(Record_SCM_FGO.("Rot Err")<30)))
 fprintf("SCM_FGO_clustered: %d \n",length(find(Record_SCM_FGO_clustered.("Rot Err")<30)))
 fprintf("SCM_EGO_clustered: %d \n",length(find(Record_SCM_EGO_clustered.("Rot Err")<30)))
 output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+
+
+% diary off;
+
 % save(output_filename);
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
