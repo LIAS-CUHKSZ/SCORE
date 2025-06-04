@@ -27,7 +27,7 @@ if cube_width<=sample_resolution
         else
             flag =-1;
         end
-        if range_phi(1) <= pi
+        if range_phi(1) <= pi&& range_phi(2)<=pi
             outer_alpha = line_pair.outer_east(i,1);
             outer_phi = line_pair.outer_east(i,2);
             x =line_pair.vector_outer_east(i,:);

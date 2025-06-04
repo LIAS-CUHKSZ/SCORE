@@ -15,7 +15,7 @@ line_map_extractor/out/**/*.ply
 line_map_extractor/out/**/*.npy
 csv_dataset/**/*.csv
 csv_dataset/**/*.mat
-matlab/FGO_PnL/codegen/*
+**/codegen/*
 **/*.prj
 matlab/debug/*
 dataset/*

@@ -15,6 +15,15 @@ dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
 dataset_idx = dataset_ids(3);
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
+%%%% debug log   %%%%%%%
+diary_name  = 'log.txt';
+if exist(diary_name,'file')
+    delete(diary_name);
+end
+diary(diary_name);
+%%%%%%%%%%%%%%%%%
+
+%%% ..........
 
 %%% statistics
 total_img=1000;
@@ -44,7 +53,7 @@ branch_reso = pi/512; % terminate bnb when branch size <= branch_reso
 sample_reso = pi/256; % resolution for interval analysis
 % set threshold
 line_num_thres=5; % minimal number of 2D lines required in the image
-parfor num =0:total_img
+parfor num =1:1000
     img_idx=num*10;     
     %%% read 2D line data of cur image
     frame_id = sprintf("%06d",img_idx);
@@ -137,13 +146,17 @@ Record_SCM_EGO_clustered(Record_SCM_EGO_clustered.("Best Score")==0,:)=[];
 %%
 fprintf("============ statistics ============\n")
 fprintf("num of valid images: %d\n",height(Record_SCM_FGO_clustered));
-fprintf("num of re-localized images (rot err < 30 degrees):\n")
-fprintf("CM_EGO: %d \n",length(find(Record_CM_EGO.("Rot Err")<30)))
-fprintf("CM_FGO: %d \n",length(find(Record_CM_FGO.("Rot Err")<30)))
-fprintf("SCM_FGO: %d \n",length(find(Record_SCM_FGO.("Rot Err")<30)))
-fprintf("SCM_FGO_clustered: %d \n",length(find(Record_SCM_FGO_clustered.("Rot Err")<30)))
-fprintf("SCM_EGO_clustered: %d \n",length(find(Record_SCM_EGO_clustered.("Rot Err")<30)))
+fprintf("num of re-localized images (rot err < 10 degrees):\n")
+fprintf("CM_EGO: %d \n",length(find(Record_CM_EGO.("Rot Err")<10)))
+fprintf("CM_FGO: %d \n",length(find(Record_CM_FGO.("Rot Err")<10)))
+fprintf("SCM_FGO: %d \n",length(find(Record_SCM_FGO.("Rot Err")<10)))
+fprintf("SCM_FGO_clustered: %d \n",length(find(Record_SCM_FGO_clustered.("Rot Err")<10)))
+fprintf("SCM_EGO_clustered: %d \n",length(find(Record_SCM_EGO_clustered.("Rot Err")<10)))
 output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+
+
+% diary off;
+
 % save(output_filename);
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
