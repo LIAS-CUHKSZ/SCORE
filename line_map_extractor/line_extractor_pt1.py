@@ -260,38 +260,39 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
             v = np.array([0, 1, 0])
         elif np.abs(np.dot(v, np.array([0, 0, 1]))) > helper.params_3D["parrallel_thresh_3D"]:
             v = np.array([0, 0, 1])
-
+        # find two endpoints along direction vector v and pass point p
         point_min = p + v/v[sig_dim]*(min_val-p[sig_dim])
         point_max = p + v/v[sig_dim]*(max_val-p[sig_dim])
 
-        # Store 3D line data
-        line_3D_semantic_id.append(semantic_id)
-        line_3D_end_points.append([point_min, point_max])
-
-        # Store 2D line data
+        # calculate 2D line parameters
         x1, y1 = xyz_list[best_one][0,0:2]
         x2, y2 = xyz_list[best_one][-1,0:2]
         x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-
         if x1 == x2:
             A, B, C = 1, 0, -x1
         else:
             m, c = helper.get_line_eq(x1, y1, x2, y2)
             A, B, C = m, -1, c
-
         line_2D_param_pixel = np.array([A, B, C])
+        
+        # Calculate projection error
+        error_rot, error_trans = helper.calculate_error(
+            line_2D_param_pixel.reshape(1,3), v, intrinsic, pose_matrix, point_min, point_max
+        )
+        if error_rot > 0.1 or error_trans > 0.1: # discard lines with large projection error
+            print(f"Warning: projection error too large for {basename} at index {j}, error_rot ={error_rot}, error_t={error_trans}")
+            continue
+
+        ### Store data
+        # 3D line 
+        line_3D_semantic_id.append(semantic_id)
+        line_3D_end_points.append([point_min, point_max])
+        # 2D kube
         line_2D_params.append(line_2D_param_pixel)
         line_2D_points.append([xyz_list[best_one][:,0], xyz_list[best_one][:,1]])
         line_2D_end_points.append([[x1,y1], [x2,y2]])
         line_2D_semantic_id.append(semantic_id)
         line_2D_match_idx.append(len(line_3D_semantic_id) - 1)
-
-        # Calculate projection error
-        error_rot, error_trans = helper.calculate_error(
-            line_2D_param_pixel.reshape(1,3), v, intrinsic, pose_matrix, point_min, point_max
-        )
-        if error_rot > 0.1 or error_trans > 0.1:
-            print(basename, j, error_rot, error_trans)
         proj_error_r.append(np.abs(error_rot))
         proj_error_t.append(np.abs(error_trans))
 
@@ -407,6 +408,20 @@ def main(data_root_dir,output_root_dir,scene_id):
     # Load pose data
     with open(config['pose_file'], "r") as f:
         pose_data = json.load(f)
+
+    # # Process images one by one (for debugging)
+    # results=[]
+    # for depth_img_name in tqdm(depth_img_list):
+    #     # num = int(depth_img_name[-8:-4])
+    #     # if num < 5000:
+    #     #     continue
+    #     result = process_file(
+    #         depth_img_name,
+    #         config,
+    #         pose_data,
+    #         id_remapping
+    #     )    
+    #     results.append(result)
 
     # Process images in parallel
     results = Parallel(n_jobs=helper.params_2D["thread_number"])(

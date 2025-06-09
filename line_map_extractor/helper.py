@@ -38,7 +38,7 @@ params_3D = {
     # for parallel computing
     "thread_number": 32,                                 
     # for 3D line merging
-    "parrallel_thresh_3D":np.cos(2.5*np.pi/180), # tune this
+    "parrallel_thresh_3D":np.cos(2*np.pi/180), # tune this
     "overlap_thresh_3D": 0.025,                  # tune this
     # for 3D line pruning
     "degree_threshold": 1,                       # tune this
@@ -186,11 +186,17 @@ def calculate_error(n_j_pixel,v,intrinsic_matrix,pose_matrix,point_a,point_b):
     n_j_camera = n_j_pixel @ intrinsic_matrix
     n_j_camera = n_j_camera / np.linalg.norm(n_j_camera)
     n_j_camera = n_j_camera.reshape(3,1)
-    error_rot = (pose_matrix[:3, :3] @ n_j_camera).T @ v
-    error_trans_a = (point_a.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
-    error_trans_b = (point_b.T - np.array(pose_matrix)[:3, 3]) @ (pose_matrix[:3, :3] @ n_j_camera)
-    if np.sign(error_trans_a) != np.sign(error_trans_b):
-        error_trans = 0.0001
-    else:
-        error_trans = np.min([np.abs(error_trans_a),np.abs(error_trans_b)])
+    rot_n_j = pose_matrix[:3, :3] @ n_j_camera
+    v = v.reshape(3,1)
+    error_rot = rot_n_j.T @ v
+    pert_rot_n_j = (np.eye(3) - v @ v.T) @ rot_n_j
+    pert_rot_n_j = pert_rot_n_j / np.linalg.norm(pert_rot_n_j)
+    pert_rot_n_j = pert_rot_n_j.reshape(3,1)
+    error_trans = (point_a.T - np.array(pose_matrix)[:3, 3]) @ pert_rot_n_j
+    # error_trans_a = (point_a.T - np.array(pose_matrix)[:3, 3]) @ rot_n_j
+    # error_trans_b = (point_b.T - np.array(pose_matrix)[:3, 3]) @ rot_n_j
+    # if np.sign(error_trans_a) != np.sign(error_trans_b):
+    #     error_trans = 0.0001
+    # else:
+    #     error_trans = np.min([np.abs(error_trans_a),np.abs(error_trans_b)])
     return error_rot, error_trans
