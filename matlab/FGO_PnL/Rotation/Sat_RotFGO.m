@@ -122,43 +122,6 @@ time=toc;
 end
 
 %%%%%%%%%%%%%%%%%%%%% subfunctions %%%%%%%%%%%%%%%%%%%%%%
-function stabber_clustered=cluster_stabber(stabbers,thres)
-if isscalar(stabbers)
-    stabber_clustered=stabbers;
-    return
-end
-stabber_clustered=[];
-N = length(stabbers);
-stabber_buffer=stabbers(1);
-for n=2:N
-    new_stabber=stabbers(n);
-    if new_stabber-stabber_buffer(1)>thres
-        temp_idx = 1:length(stabber_buffer)-1+mod(length(stabber_buffer),2);
-        stabber_clustered=[stabber_clustered,median(stabber_buffer(temp_idx))];
-        stabber_buffer=new_stabber;
-    else
-        stabber_buffer=[stabber_buffer,new_stabber];
-    end
-end
-    temp_idx = 1:length(stabber_buffer)-1+mod(length(stabber_buffer),2);
-    stabber_clustered=[stabber_clustered,median(stabber_buffer(temp_idx))];
-end
-
-function out=subBranch(branch)
-% divide the input 2D cube into four subcubes
-a=branch(1:2);
-b=branch(3:end);
-c=0.5*(a+b);
-M=[a,c,b];
-out=zeros(4,4);
-for i=1:4
-    out(1,i)= M(1,bitget(i,1)+1);
-    out(2,i)= M(2,bitget(i,2)+1);
-    out(3,i)= M(1,bitget(i,1)+2);
-    out(4,i)= M(2,bitget(i,2)+2);
-end
-
-end
 %
 function prox_flag = evaluate_proximity(theta_best,u_best,R_new,prox_thres)
     prox_flag=0;

@@ -21,4 +21,4 @@ matlab/debug/*
 dataset/*
 /**/backup/
 scannetpp/outputs/*
-
+**/log.txt
