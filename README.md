@@ -1,7 +1,6 @@
-The code is still under construction, the dataset and code will be released in early June, stay tuned！
+The on-going code construction will be finished before the submission of final draft( before July 31).
 # SCORE:Saturated Consensus Relocalization in Semantic Line Maps
-This is the github repository for our IROS2025 paper. 
-The paper is under review, we provide the arxiv version here:
+Our paper has been accepted by IROS 2025, and a longer version can be found on arxiv: 
 https://arxiv.org/pdf/2503.03254
 
 ## 1. Matlab Implementation for FGO-PnL solver and Examples
