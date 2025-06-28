@@ -104,6 +104,143 @@ def compute_best_views(scene, raster_dir, image_type, subsample_factor, undistor
     return best_views
 
 
+def split_views_by_coverage(scene, raster_dir, image_type, subsample_factor, undistort_dslr, split_ratio, coverage_threshold=0.98):
+    mesh = o3d.io.read_triangle_mesh(str(scene.scan_mesh_path)) 
+    faces = np.array(mesh.triangles)
+
+    colmap_camera, image_list, _, distort_params = get_camera_images_poses(scene, subsample_factor, image_type)
+    if distort_params is not None:
+        distort_params = distort_params[:4]
+
+    intrinsic = camera_to_intrinsic(colmap_camera)
+    img_height, img_width = colmap_camera.height, colmap_camera.width
+
+    if image_type == 'dslr' and undistort_dslr:
+        undistort_intrinsic = compute_undistort_intrinsic(intrinsic, img_height, img_width, distort_params)
+        undistort_map1, undistort_map2 = get_undistort_maps(intrinsic, distort_params, undistort_intrinsic, img_height, img_width)
+
+    face_seen_ids = np.ones((len(faces), len(image_list)), dtype=np.int32) * -1
+
+    train_views = []
+    total_faces = len(faces)
+    covered_faces_mask = np.zeros(total_faces, dtype=bool)
+
+    for image_ndx, image_name in enumerate(tqdm(image_list, desc='image')):
+        rasterout_path = Path(raster_dir) / scene.scene_id / f'{image_name}.pth'
+        raster_out_dict = torch.load(rasterout_path)
+
+        pix_to_face = raster_out_dict['pix_to_face'].squeeze().cpu()
+        zbuf = raster_out_dict['zbuf'].squeeze().cpu()
+
+        rasterized_dims = list(pix_to_face.shape)
+
+        if rasterized_dims != [img_height, img_width]: # upsample
+            pix_to_face, zbuf = upsample_rasterization(pix_to_face, zbuf, img_height, img_width)
+
+        pix_to_face = pix_to_face.numpy()
+
+        if image_type == 'dslr' and undistort_dslr: # undistort
+            pix_to_face, zbuf = undistort_rasterization(pix_to_face, zbuf.numpy(), undistort_map1, undistort_map2)
+                
+        valid_pix_to_face =  pix_to_face[:, :] != -1
+        face_ndx = np.unique(pix_to_face[valid_pix_to_face])
+
+        face_seen_ids[face_ndx, image_ndx] = image_ndx
+
+    for i in tqdm(range(len(image_list)), desc='Finding views for training set'):
+        current_coverage = np.sum(covered_faces_mask) / total_faces
+        if current_coverage >= coverage_threshold:
+            print(f"\nCoverage threshold ({coverage_threshold:.2%}) reached. Stopping at {current_coverage:.2%}.")
+            break
+
+        face_seen_counts = np.sum(face_seen_ids != -1, axis=0)
+        
+        if np.max(face_seen_counts) == 0:
+            print(f"\nNo more new faces can be covered. Stopping at {current_coverage:.2%}.")
+            break
+        
+        if len(train_views) / len(image_list) >= split_ratio:
+            print(f"\nReached 90% of images in training set. Stopping at {current_coverage:.2%}.")
+            break
+
+        best_image_ndx = np.argmax(face_seen_counts)
+        train_views.append(image_list[best_image_ndx])
+        faces_seen = face_seen_ids[:, best_image_ndx] != -1 # faces seen by the current best image
+        
+        covered_faces_mask[faces_seen] = True
+
+        face_seen_ids[faces_seen, :] = -1
+        
+        print(f"  [Iter {i+1}] Selected: {image_list[best_image_ndx]}, Coverage: {np.sum(covered_faces_mask) / total_faces:.2%}")
+
+    train_set = set(train_views)
+    all_set = set(image_list)
+    test_views = list(all_set - train_set)
+
+    return train_views, test_views
+
+def find_similar_views_by_coverage(scene, raster_dir, image_type, subsample_factor, undistort_dslr, num_neighbors=8):
+
+    print(f"Finding {num_neighbors} most similar views for each image in scene {scene.scene_id} based on coverage...")
+
+    mesh = o3d.io.read_triangle_mesh(str(scene.scan_mesh_path))
+    colmap_camera, image_list, _, distort_params = get_camera_images_poses(scene, subsample_factor, image_type)
+    
+    if distort_params is not None:
+        distort_params = distort_params[:4]
+
+    intrinsic = camera_to_intrinsic(colmap_camera)
+    img_height, img_width = colmap_camera.height, colmap_camera.width
+
+    undistort_map1, undistort_map2 = None, None
+    if image_type == 'dslr' and undistort_dslr:
+        undistort_intrinsic = compute_undistort_intrinsic(intrinsic, img_height, img_width, distort_params)
+        undistort_map1, undistort_map2 = get_undistort_maps(intrinsic, distort_params, undistort_intrinsic, img_height, img_width)
+
+    image_to_faces = {}
+    for image_name in tqdm(image_list, desc='Preprocessing images to get face coverage'):
+        rasterout_path = Path(raster_dir) / scene.scene_id / f'{image_name}.pth'
+        raster_out_dict = torch.load(rasterout_path)
+
+        pix_to_face = raster_out_dict['pix_to_face'].squeeze().cpu()
+        zbuf = raster_out_dict['zbuf'].squeeze().cpu()
+
+        if list(pix_to_face.shape) != [img_height, img_width]:
+            pix_to_face, _ = upsample_rasterization(pix_to_face, zbuf, img_height, img_width)
+        
+        pix_to_face = pix_to_face.numpy()
+
+        if image_type == 'dslr' and undistort_dslr:
+            pix_to_face, _ = undistort_rasterization(pix_to_face, zbuf.numpy(), undistort_map1, undistort_map2)
+        
+        visible_faces = np.unique(pix_to_face[pix_to_face != -1])
+        image_to_faces[image_name] = set(visible_faces)
+
+    similar_views_data = {}
+    for i, source_image_name in enumerate(tqdm(image_list, desc='Calculating similarities and finding neighbors')):
+        source_faces = image_to_faces[source_image_name]
+        
+        similarities = []
+        for j, neighbor_image_name in enumerate(image_list):
+            if i == j:
+                continue
+            
+            neighbor_faces = image_to_faces[neighbor_image_name]
+            
+            intersection = len(source_faces.intersection(neighbor_faces))
+            union = len(source_faces.union(neighbor_faces))
+            
+            jaccard_similarity = intersection / union if union > 0 else 0.0
+            
+            similarities.append((neighbor_image_name, jaccard_similarity))
+            
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        
+        similar_views_data[source_image_name] = similarities[:num_neighbors]
+
+    print("Finished finding similar views.")
+    return similar_views_data
+
 def compute_visiblity(scene, anno, raster_dir, image_type, subsample_factor, undistort_dslr=True):
     '''
     dict for 1 scene
