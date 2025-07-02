@@ -15,7 +15,7 @@ Version: 1.0
 License: MIT
 """
 
-import helper
+from util import helper
 import cv2
 import numpy as np
 import glob
@@ -26,6 +26,7 @@ from tqdm import tqdm
 from skimage.measure import LineModelND, ransac
 from joblib import Parallel, delayed
 from scipy import stats
+from scipy.spatial.transform import Rotation
 
 def load_config(data_root_dir,output_root_dir,scene_id): 
     """Load configuration and paths""" 
@@ -34,9 +35,12 @@ def load_config(data_root_dir,output_root_dir,scene_id):
         'data_root_dir': data_root_dir,
         'output_root_dir': output_root_dir,
         'scene_id': scene_id,
-        'rgb_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/rgb/"),
+        'train_list': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/train.txt"),
+        # 'train_list': os.path.join(data_root_dir, f"best_view_cache_iphone/iphone/{scene_id}_train.txt"),
+        'rgb_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/rgb/kept_images/"),
         'depth_image_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/render_depth/"),
-        'pose_file': os.path.join(data_root_dir, f"data/{scene_id}/iphone/pose_intrinsic_imu.json"),
+        'pose_file': os.path.join(data_root_dir, f"data/{scene_id}/iphone/colmap/images.txt"),
+        'intrinsic_file': os.path.join(data_root_dir, f"data/{scene_id}/iphone/colmap/cameras.txt"),
         'anno_file': os.path.join(data_root_dir, f"data/{scene_id}/scans/segments_anno.json"),
         'segments_file': os.path.join(data_root_dir, f"data/{scene_id}/scans/segments.json"),
         'instance_path': os.path.join(data_root_dir, f"semantic_2D_iphone/obj_ids/{scene_id}/"),
@@ -44,12 +48,12 @@ def load_config(data_root_dir,output_root_dir,scene_id):
     }
     # Setup output directories
     config.update({
-        'line_image_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/rgb_line_image/"),
-        'line_mesh_raw_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/line_mesh_raw/"),
-        'line_data_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/")
+        'line_image_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/rgb_line_image/"),
+        'line_mesh_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/line_mesh/"),
+        'line_data_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/")
     })
     # Create output directories
-    for out_path in [config['line_image_folder'], config['line_mesh_raw_folder'], config['dictionary_folder']]:
+    for out_path in [config['line_image_folder'], config['line_mesh_folder'], config['dictionary_folder']]:
         if not os.path.exists(out_path):
             os.makedirs(out_path)
     # load obj_labels
@@ -112,13 +116,17 @@ def load_image_lists(config):
     """Load images with both rgb and depth data"""
     depth_img_list = sorted(glob.glob(config['depth_image_folder'] + "*.png"))
     rgb_img_list = sorted(glob.glob(config['rgb_folder'] + "*.jpg"))
-    depth_img_list = depth_img_list[::2]  # downsample
-    
+    with open(config['train_list'], "r") as f:
+        train_list = f.readlines()
+    train_list = [line.strip() for line in train_list]
+    rgb_img_list = [img for img in rgb_img_list if os.path.basename(img) in train_list]
+    # depth_img_list = depth_img_list[::2]  # downsample
     # Remove depth images without corresponding RGB images
     k = 0
     while k < len(depth_img_list):
         depth_img_name = depth_img_list[k]
-        rgb_file = depth_img_name.replace("render_depth", "rgb").replace("png", "jpg")
+        basename = os.path.basename(depth_img_name).split(".")[0]
+        rgb_file = config['rgb_folder']+basename+".jpg"
         if rgb_file not in rgb_img_list:
             depth_img_list.remove(depth_img_name)
         else:
@@ -145,14 +153,14 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
 
     # Load images
     render_depth = cv2.imread(depth_img_name, cv2.IMREAD_UNCHANGED).astype(np.float32) / 1000  # millimeter to meter
-    rgb_file = depth_img_name.replace("render_depth", "rgb").replace("png", "jpg")
+    rgb_file = config['rgb_folder']+basename+".jpg"
     objId_file = os.path.join(config['instance_path'], str(os.path.basename(depth_img_name)).replace(".png", ".jpg.npy"))
     obj_ids = np.load(objId_file)
     gray_img = cv2.imread(rgb_file, cv2.IMREAD_GRAYSCALE)
     rgb_img = cv2.imread(rgb_file)
 
     # Extract and Prune 2D Line segments
-    segments = helper.extract_and_prune_2Dlines(gray_img)
+    segments = helper.extract_and_prune_2Dlines(gray_img, helper.params_2D_build)
     line_2D_count = 0  # valid 2D line id in the cur image
 
     for j, segment in enumerate(segments):
@@ -182,7 +190,7 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
 
         # Get the foreground points by multi-hypothesis perturbation
         depth_mean, xyz_list, foreground_idices, background_flag = helper.perturb_and_extract(
-            x, y, render_depth, v, helper.params_2D["num_hypo"]*2+1
+            x, y, render_depth, v, helper.params_2D_build["num_hypo"]*2+1
         )
         if np.min(depth_mean) == 255:  # no valid points
             continue
@@ -194,8 +202,8 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
         semantic_id = helper.extract_dominant_id(foreground_y, foreground_x, obj_ids, config['objId_id_dict'])
 
         # Check adjacent hypotheses
-        while (best_one < helper.params_2D["num_hypo"]):
-            if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2D["background_depth_diff_thresh"]:
+        while (best_one < helper.params_2D_build["num_hypo"]):
+            if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2D_build["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one+1][foreground_idices[best_one+1],0].astype(np.int32)
             foreground_y = xyz_list[best_one+1][foreground_idices[best_one+1],1].astype(np.int32)
@@ -205,8 +213,8 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
             else:
                 break
 
-        while (best_one > helper.params_2D["num_hypo"]):
-            if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2D["background_depth_diff_thresh"]:
+        while (best_one > helper.params_2D_build["num_hypo"]):
+            if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2D_build["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one-1][foreground_idices[best_one-1],0].astype(np.int32)
             foreground_y = xyz_list[best_one-1][foreground_idices[best_one-1],1].astype(np.int32)
@@ -244,7 +252,7 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
 
         # Check inlier count
         inlier_points = points_world_3D[np.where(inliers == True)]
-        if len(inlier_points) < helper.params_2D["line_points_num_thresh"]:
+        if len(inlier_points) < helper.params_2D_build["line_points_num_thresh"]:
             continue
 
         # Get line parameters
@@ -254,11 +262,11 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
         max_val = np.max(inlier_points[:, sig_dim])
 
         # Regulate vector v if close to principle axis
-        if np.abs(np.dot(v, np.array([1, 0, 0]))) > helper.params_3D["parrallel_thresh_3D"]:
+        if np.abs(np.dot(v, np.array([1, 0, 0]))) > helper.params_merge_prune["parrallel_thresh_3D"]:
             v = np.array([1, 0, 0])
-        elif np.abs(np.dot(v, np.array([0, 1, 0]))) > helper.params_3D["parrallel_thresh_3D"]:
+        elif np.abs(np.dot(v, np.array([0, 1, 0]))) > helper.params_merge_prune["parrallel_thresh_3D"]:
             v = np.array([0, 1, 0])
-        elif np.abs(np.dot(v, np.array([0, 0, 1]))) > helper.params_3D["parrallel_thresh_3D"]:
+        elif np.abs(np.dot(v, np.array([0, 0, 1]))) > helper.params_merge_prune["parrallel_thresh_3D"]:
             v = np.array([0, 0, 1])
         # find two endpoints along direction vector v and pass point p
         point_min = p + v/v[sig_dim]*(min_val-p[sig_dim])
@@ -324,7 +332,7 @@ def aggregate_results(results, pose_data):
         'scene_line_2D_end_points': {},
         'scene_line_2D_semantic_ids': {},
         'scene_line_2D_params': {},
-        'scene_line_2D_match_idx': {},
+        'scene_line_2D_match_idx_raw': {},
         'scene_proj_error_r_raw': {},
         'scene_proj_error_t_raw': {},
         'scene_line_3D_semantic_ids': [],
@@ -349,7 +357,7 @@ def aggregate_results(results, pose_data):
         # Update match indices
         for i in range(len(line_2D_match_idx)):
             line_2D_match_idx[i] += len(scene_data['scene_line_3D_semantic_ids'])
-        scene_data['scene_line_2D_match_idx'][basename] = np.array(line_2D_match_idx)
+        scene_data['scene_line_2D_match_idx_raw'][basename] = np.array(line_2D_match_idx)
         
         # Store 3D data
         scene_data['scene_line_3D_semantic_ids'].extend(line_3D_semantic_id)
@@ -367,7 +375,7 @@ def aggregate_results(results, pose_data):
     
     # Add metadata
     scene_data.update({
-        'params_2D': helper.params_2D
+        'params_2D_build': helper.params_2D_build
     })
     
     return scene_data
@@ -390,7 +398,7 @@ def save_results_and_mesh(config, results_dict):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(point_sets)
     o3d.io.write_point_cloud(
-        os.path.join(config['line_mesh_raw_folder'], f"{config['scene_id']}_raw_3D_line_mesh.ply"), 
+        os.path.join(config['line_mesh_folder'], f"{config['scene_id']}_raw_3D_line_mesh.ply"), 
         pcd
     )
     print("Save raw 3D line mesh successfully.")
@@ -406,8 +414,32 @@ def main(data_root_dir,output_root_dir,scene_id):
     depth_img_list = load_image_lists(config)
     
     # Load pose data
+    pose_data = {}
+    with open(config['intrinsic_file'], "r") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            _, _, width, height, fx, fy, cx, cy, k1, k2, p1, p2 = line.strip().split()
+            fx, fy, cx, cy, k1, k2, p1, p2 = map(float, [fx, fy, cx, cy, k1, k2, p1, p2])
+            intrinsic_matrix = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+            distortion_params = np.array([k1, k2, p1, p2])
+
     with open(config['pose_file'], "r") as f:
-        pose_data = json.load(f)
+        for line in f:
+            if line.startswith("#") or line.startswith("\n"):
+                continue
+            _, qw, qx, qy, qz, tx, ty, tz, _, basename = line.strip().split()
+            basename = basename.split(".")[0]
+            rot_matrix = Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
+            pose_matrix = np.eye(4)
+            pose_matrix[:3, :3] = rot_matrix.T
+            tx, ty, tz = map(float, [tx, ty, tz])
+            pose_matrix[:3, 3] = -rot_matrix.T @ np.array([tx, ty, tz])
+            pose_data[basename] = {
+                "aligned_pose": pose_matrix,
+                "intrinsic": intrinsic_matrix,
+                "distortion_params": distortion_params
+            }
 
     # # Process images one by one (for debugging)
     # results=[]
@@ -424,7 +456,7 @@ def main(data_root_dir,output_root_dir,scene_id):
     #     results.append(result)
 
     # Process images in parallel
-    results = Parallel(n_jobs=helper.params_2D["thread_number"])(
+    results = Parallel(n_jobs=helper.thread_number)(
         delayed(process_file)(
             depth_img_name,
             config,
@@ -436,7 +468,7 @@ def main(data_root_dir,output_root_dir,scene_id):
     # Aggregate results
     results_dict = aggregate_results(results, pose_data)
     results_dict['id_label_dict'] = config['id_label_dict']
-
+    
     # Save results as a numpy file and output line mesh as ply files
     save_results_and_mesh(config, results_dict)
     print("Process completed.")
@@ -446,7 +478,7 @@ if __name__ == "__main__":
     data_root_dir = "/data2/scannetppv2"
     output_root_dir = "/data1/home/lucky/IROS25/SCORE/"
     scene_list = ["69e5939669","689fec23D7","c173f62b15","55b2bf8036"]
-    scene_id = scene_list[2]
+    scene_id = scene_list[0]
     main(data_root_dir,output_root_dir,scene_id)
 
 

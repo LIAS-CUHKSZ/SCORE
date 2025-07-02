@@ -49,12 +49,6 @@ def undistort_frames(
     for frame in tqdm(frames, desc="frame"):
         image_path = Path(input_image_dir) / frame["file_path"]
         image = cv2.imread(str(image_path))
-        depth_image = cv2.imread(
-            str(image_path)
-            .replace("resized_images", "render_depth")
-            .replace(".JPG", ".png"),
-            cv2.IMREAD_UNCHANGED,
-        )
         undistorted_image = cv2.remap(
             image,
             map1,
@@ -62,27 +56,9 @@ def undistort_frames(
             interpolation=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_REFLECT_101,
         )
-        undistorted_depth_image = cv2.remap(
-            depth_image,
-            map1,
-            map2,
-            interpolation=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_REFLECT_101,
-        )
-
         out_image_path = Path(out_image_dir) / frame["file_path"]
         out_image_path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(out_image_path), undistorted_image)
-        out_depth_image_path = (
-            Path(str(out_image_dir).replace("images", "depth_images")) / frame["file_path"]
-        )
-        out_depth_image_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(
-            str(out_image_path)
-            .replace("images", "depth_images")
-            .replace(".JPG", ".png"),
-            undistorted_depth_image,
-        )
 
         # Mask
         mask_path = Path(input_mask_dir) / frame["mask_path"]
@@ -139,9 +115,7 @@ def main(args):
     # get the options to process
     # go through each scene
     for scene_id in tqdm(scene_ids, desc="scene"):
-        scene = ScannetppScene_Release(
-            scene_id, data_root=Path(cfg.data_root) / "data_selected"
-        )
+        scene = ScannetppScene_Release(scene_id, data_root=Path(cfg.data_root) / "data")
         input_image_dir = cfg.get("input_image_dir", None)
         if input_image_dir is None:
             input_image_dir = scene.dslr_resized_dir

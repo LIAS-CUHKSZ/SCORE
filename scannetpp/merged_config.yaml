@@ -1,7 +1,7 @@
 ###################### common properties ######################
 # scene ids to be processed
-scene_ids: ["69e5939669"]          # c173f62b15, 69e5939669
-filter_scenes: ["69e5939669"]   
+scene_ids: ["55b2bf8036"]          # 55b2bf8036, c173f62b15, 69e5939669, 689fec23d7
+filter_scenes: ["55b2bf8036"]   
 exclude_scenes: []
 # image type - iphone or dslr
 image_type: iphone

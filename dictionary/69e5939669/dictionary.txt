@@ -14,8 +14,6 @@
 24,box
 25,roller blinds
 26,bucket
-27,container
-31,cardboard
 33,mat
 41,whiteboard
 42,poster
@@ -38,9 +36,11 @@
 20,doorframe
 21,REMOVE
 23,tube
+27,container
 28,brushes
 29,tools
 30,book
+31,cardboard
 32,rolled paper
 34,tablecloth
 35,jug

@@ -21,7 +21,7 @@ import argparse
 from joblib import Parallel, delayed
 from scipy import stats
 from tqdm import tqdm
-import helper
+from util import helper
 
 class LineStates:
     """Holds all input data."""
@@ -29,22 +29,23 @@ class LineStates:
         self.scene_id = scene_id
         self.root_dir = "/data1/home/lucky/IROS25/"
         self.scene_data_path = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/{scene_id}_results_raw.npy"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/{scene_id}_results_raw.npy"
         )
         self.line_data_folder = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/"
         )
         self.line_mesh_folder = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/line_mesh_merged/"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/line_mesh/"
         )
         self.ensure_dirs()
         self.load_scene_data()
         # Merged data containers
-        self.merged_semantic_id_3D = []
-        self.merged_scene_line_3D_end_points = []
-        self.scene_projection_error_r = {}
-        self.scene_projection_error_t = {}
-        self.scene_line_2D_match_idx_updated = {}
+        self.merged_semantic_ids_3D = []
+        self.merged_end_points_3D = []
+        self.scene_proj_error_r = {}
+        self.scene_proj_error_t = {}
+        self.scene_line_2D_match_idx = {}
+        self.retrived_3D_line_idx = {}
 
     def ensure_dirs(self):
         for out_path in [self.line_data_folder, self.line_mesh_folder]:
@@ -59,7 +60,7 @@ class LineStates:
         self.scene_line_2D_end_points = scene_data["scene_line_2D_end_points"]
         self.scene_line_2D_semantic_ids = scene_data["scene_line_2D_semantic_ids"]
         self.scene_line_2D_params = scene_data["scene_line_2D_params"]
-        self.scene_line_2D_match_idx = scene_data["scene_line_2D_match_idx"]
+        self.scene_line_2D_match_idx_raw = scene_data["scene_line_2D_match_idx_raw"]
         self.scene_line_3D_end_points = scene_data["scene_line_3D_end_points"]
         self.scene_line_3D_image_source = scene_data["scene_line_3D_image_source"]
         self.scene_line_3D_semantic_ids = scene_data["scene_line_3D_semantic_ids"]
@@ -70,7 +71,8 @@ def construct_graph(state):
     Each 3D line is a vertex; edges are defined by parallel and proximity conditions.
     """
     nnode = len(state.scene_line_3D_semantic_ids)
-    pi_list = np.array([(state.scene_line_3D_end_points[i][0] + state.scene_line_3D_end_points[i][1]).reshape(1, 3) / 2 for i in range(nnode)])
+    p_head_list = np.array([state.scene_line_3D_end_points[i][0] for i in range(nnode)])
+    p_tail_list = np.array([state.scene_line_3D_end_points[i][1] for i in range(nnode)])
     p_diff_list = np.array([(state.scene_line_3D_end_points[i][1] - state.scene_line_3D_end_points[i][0]).reshape(1, 3) for i in range(nnode)])
     vi_list = np.array([p_diff_list[i] / np.linalg.norm(p_diff_list[i]) for i in range(nnode)])
     project_null_list = np.eye(3) - np.einsum('ijk,ijl->ikl', vi_list, vi_list)
@@ -84,14 +86,19 @@ def construct_graph(state):
         cur_image_indices = [scene_line_3D_image_source[i]]
         for j in range(i + 1, nnode):
             if scene_line_3D_image_source[j] not in cur_image_indices:
-                if abs(np.dot(vi_list[i], vi_list[j].T)) >= helper.params_3D["parrallel_thresh_3D"]:
-                    if np.linalg.norm(np.dot(project_null_list[i], (pi_list[i] - pi_list[j]).T)) <= helper.params_3D["overlap_thresh_3D"]:
+                if abs(np.dot(vi_list[i], vi_list[j].T)) >= helper.params_merge_prune["parrallel_thresh_3D"]:
+                    distance_set = np.zeros(4)
+                    distance_set[0] = np.linalg.norm(np.dot(project_null_list[j], (p_head_list[i] - p_head_list[j]).T))
+                    distance_set[1] = np.linalg.norm(np.dot(project_null_list[j], (p_tail_list[i] - p_tail_list[j]).T))
+                    distance_set[2] = np.linalg.norm(np.dot(project_null_list[i], (p_head_list[i] - p_head_list[j]).T))
+                    distance_set[3] = np.linalg.norm(np.dot(project_null_list[i], (p_tail_list[i] - p_tail_list[j]).T))
+                    if np.max(distance_set) <= helper.params_merge_prune["overlap_thresh_3D"]:
                         edges_i.append(i)
                         edges_j.append(j)
                         cur_image_indices.append(scene_line_3D_image_source[j])
         return edges_i, edges_j
 
-    results = Parallel(n_jobs=helper.params_3D["thread_number"])(delayed(find_neighbors)(i) for i in range(nnode))
+    results = Parallel(n_jobs=helper.thread_number)(delayed(find_neighbors)(i) for i in range(nnode))
     edges_i, edges_j = [], []
     for edges_i_, edges_j_ in results:
         edges_i.extend(edges_i_)
@@ -118,7 +125,7 @@ def merge_lines(state):
 
     # Step 0: Remove suspicious lines observed by too few images
     unique_elements, counts = np.unique(vertex_concat, return_counts=True)
-    vertex_deleted = unique_elements[counts < helper.params_3D["degree_threshold"] + 2]
+    vertex_deleted = unique_elements[counts < helper.params_merge_prune["degree_threshold"] + 2]
     for ver in vertex_deleted:
         mapping[ver] = np.nan
     index_deleted = []
@@ -162,11 +169,11 @@ def merge_lines(state):
         unique_cluster_semantic_ids = np.unique(cluster_semantic_ids)
         unique_cluster_semantic_ids = unique_cluster_semantic_ids[unique_cluster_semantic_ids != 0]
         for label in unique_cluster_semantic_ids:
-            state.merged_semantic_id_3D.append(label)
-            state.merged_scene_line_3D_end_points.append(end_points)
+            state.merged_semantic_ids_3D.append(label)
+            state.merged_end_points_3D.append(end_points)
             for neighbor in neighbors:
                 if label == state.scene_line_3D_semantic_ids[neighbor]:
-                    mapping[neighbor] = len(state.merged_semantic_id_3D) - 1
+                    mapping[neighbor] = len(state.merged_semantic_ids_3D) - 1
         # Debug: output the 3D line with more than 3 semantic labels
         if len(unique_cluster_semantic_ids) > 3:
             point_diff = end_points[1] - end_points[0]
@@ -179,7 +186,7 @@ def merge_lines(state):
             countt += 1
             for k in range(len(unique_cluster_semantic_ids)):
                 print(f"{state.id_label_dict[unique_cluster_semantic_ids[k]]},", end="")
-    print("# 3D lines after merging:", len(state.merged_scene_line_3D_end_points))
+    print("# 3D lines after merging:", len(state.merged_end_points_3D))
     return mapping
 
 def update_err(state, mapping):
@@ -188,35 +195,50 @@ def update_err(state, mapping):
     Computes the projection error for each 2D line based on the merged 3D lines.
     """
     print("Updating projection error after merging")
-    for basename in state.scene_line_2D_match_idx.keys():
-        projection_error_r = []
-        projection_error_t = []
+    for basename in state.scene_line_2D_match_idx_raw.keys():
+        proj_error_r = []
+        proj_error_t = []
         intrinsic = state.scene_intrinsic[basename]
         pose_matrix = np.array(state.scene_pose[basename])
-        line_2D_match_idx = np.array(state.scene_line_2D_match_idx[basename])
-        line_2D_match_idx_updated = line_2D_match_idx.copy()
-        for j in range(len(line_2D_match_idx)):
-            if np.isnan(line_2D_match_idx[j]) or np.isnan(mapping[line_2D_match_idx[j]]):
-                line_2D_match_idx_updated[j] = -1
-                projection_error_r.append(np.nan)
-                projection_error_t.append(np.nan)
+        line_2D_match_idx_raw = np.array(state.scene_line_2D_match_idx_raw[basename])
+        line_2D_end_points = np.array(state.scene_line_2D_end_points[basename])
+        line_2D_semantic_ids = np.array(state.scene_line_2D_semantic_ids[basename])
+        line_2D_params = np.array(state.scene_line_2D_params[basename])
+        line_2D_match_idx = line_2D_match_idx_raw.copy().astype(np.double)
+        for j in range(len(line_2D_match_idx_raw)):
+            if np.isnan(line_2D_match_idx_raw[j]) or np.isnan(mapping[line_2D_match_idx_raw[j]]):
+                pixel_a = line_2D_end_points[j][0]  
+                pixel_b = line_2D_end_points[j][1]
+                semantic_id = line_2D_semantic_ids[j]
+                v_2D = pixel_b - pixel_a
+                v_2D = v_2D / np.linalg.norm(v_2D)
+                n_j = line_2D_params[j].reshape(1, 3)
+                line_2D_match_idx[j] = helper.find_closest_3D_line(v_2D, n_j, semantic_id, intrinsic, pose_matrix, state.merged_end_points_3D, state.merged_semantic_ids_3D) 
             else:
-                mapping_idx = mapping[line_2D_match_idx[j]]
-                line_2D_match_idx_updated[j] = mapping_idx
+                mapping_idx = mapping[line_2D_match_idx_raw[j]]
+                line_2D_match_idx[j] = mapping_idx
+            #
+            if np.isnan(line_2D_match_idx[j]):
+                proj_error_r.append(np.nan)
+                proj_error_t.append(np.nan)
+            else:
                 n_j = state.scene_line_2D_params[basename][j].reshape(1, 3)
-                end_points_3D = state.merged_scene_line_3D_end_points[mapping_idx]
+                end_points_3D = state.merged_end_points_3D[line_2D_match_idx[j].astype(np.int32)]
                 v = end_points_3D[1] - end_points_3D[0]
                 v = v / np.linalg.norm(v)
                 error_rot, error_trans = helper.calculate_error(
                     n_j, v, intrinsic, pose_matrix, end_points_3D[0], end_points_3D[1]
                 )
-                projection_error_r.append(np.abs(error_rot))
-                projection_error_t.append(np.abs(error_trans))
-                if np.abs(error_trans) > 0.1:
-                    print(f"Warning: projection error too large for {basename} at index {j}, error_t={error_trans}")
-        state.scene_line_2D_match_idx_updated[basename] = line_2D_match_idx_updated
-        state.scene_projection_error_r[basename] = projection_error_r
-        state.scene_projection_error_t[basename] = projection_error_t
+                if np.abs(error_trans) > 0.2:
+                   error_rot = np.nan
+                   error_trans = np.nan
+                   line_2D_match_idx[j] = np.nan
+                proj_error_r.append(np.abs(error_rot))
+                proj_error_t.append(np.abs(error_trans))
+        # store updated match_idx and projection error in the state           
+        state.scene_line_2D_match_idx[basename] = line_2D_match_idx
+        state.scene_proj_error_r[basename] = proj_error_r
+        state.scene_proj_error_t[basename] = proj_error_t
 
 def save_merged_line(state, sample_num):
     """
@@ -224,8 +246,8 @@ def save_merged_line(state, sample_num):
     Also saves the 3D line mesh for visualization.
     """
     point_sets = []
-    for i in range(len(state.merged_semantic_id_3D)):
-        end_points = state.merged_scene_line_3D_end_points[i]
+    for i in range(len(state.merged_semantic_ids_3D)):
+        end_points = state.merged_end_points_3D[i]
         point_diff = end_points[1] - end_points[0]
         for sample in range(sample_num):
             point_sets.append(end_points[0] + point_diff * sample / (sample_num - 1))
@@ -236,15 +258,15 @@ def save_merged_line(state, sample_num):
         os.path.join(state.line_mesh_folder, state.scene_id + f"_merged_3D_line_mesh.ply"), pcd
     )
     # Save the 3D line mesh for each semantic label
-    semantic_ids_all = np.unique(state.merged_semantic_id_3D)
+    semantic_ids_all = np.unique(state.merged_semantic_ids_3D)
     for i, semantic_id in enumerate(semantic_ids_all):
         if int(semantic_id) == 0:
             continue
-        index = np.where(state.merged_semantic_id_3D == semantic_id)
+        index = np.where(state.merged_semantic_ids_3D == semantic_id)
         print("semantic label:" + f"{state.id_label_dict[int(semantic_id)]}" + " number of lines:", len(index[0]))
         point_sets = []
         for j in range(len(index[0])):
-            end_points = state.merged_scene_line_3D_end_points[i]
+            end_points = state.merged_end_points_3D[i]
             point_diff = end_points[1] - end_points[0]
             for sample in range(sample_num):
                 point_sets.append(end_points[0] + point_diff * sample / (sample_num - 1))
@@ -255,6 +277,24 @@ def save_merged_line(state, sample_num):
             o3d.io.write_point_cloud(
                 os.path.join(state.line_mesh_folder, f"{state.id_label_dict[int(semantic_id)]}.ply"), pcd
             )
+
+def retrive_3D_line_idx(state):
+    """
+    Retrives the 3D line indices for each 2D line.
+    """
+    keys = list(state.scene_line_2D_match_idx.keys())
+    for i in range(len(keys)):
+        basename = keys[i]
+        retrived_3D_line_idx = []
+        for j in range(max(0, i-5), min(len(keys), i+6)):
+            line_3D_match_idx = []
+            line_2D_match_idx = state.scene_line_2D_match_idx[keys[j]]
+            for k in range(len(line_2D_match_idx)):
+                if not np.isnan(line_2D_match_idx[k]):
+                    line_3D_match_idx.append(line_2D_match_idx[k])
+            retrived_3D_line_idx = np.concatenate([retrived_3D_line_idx, line_3D_match_idx])
+        retrived_3D_line_idx = np.unique(retrived_3D_line_idx).astype(np.int32)
+        state.retrived_3D_line_idx[basename] = retrived_3D_line_idx
 
 def save_results(state):
     """
@@ -269,12 +309,13 @@ def save_results(state):
             "scene_line_2D_semantic_ids": state.scene_line_2D_semantic_ids,
             "scene_line_2D_params": state.scene_line_2D_params,
             "scene_line_2D_end_points": state.scene_line_2D_end_points,
-            "scene_line_2D_match_idx_updated": state.scene_line_2D_match_idx_updated,
-            "scene_projection_error_r": state.scene_projection_error_r,
-            "scene_projection_error_t": state.scene_projection_error_t,
-            "merged_scene_line_3D_semantic_ids": state.merged_semantic_id_3D,
-            "merged_scene_line_3D_end_points": state.merged_scene_line_3D_end_points,
-            "params_3D": helper.params_3D,
+            "scene_line_2D_match_idx": state.scene_line_2D_match_idx,
+            "scene_proj_error_r": state.scene_proj_error_r,
+            "scene_proj_error_t": state.scene_proj_error_t,
+            "retrived_3D_line_idx": state.retrived_3D_line_idx,
+            "merged_semantic_ids_3D": state.merged_semantic_ids_3D,
+            "merged_end_points_3D": state.merged_end_points_3D,
+            "params_merge_prune": helper.params_merge_prune,
         }
     )
 
@@ -286,6 +327,7 @@ def run(scene_id, reuse_graph_flag):
         construct_graph(state)
     mapping = merge_lines(state)
     update_err(state, mapping)
+    retrive_3D_line_idx(state)
     save_results(state)
     sample_num = 300
     save_merged_line(state, sample_num)
@@ -293,10 +335,11 @@ def run(scene_id, reuse_graph_flag):
 
 if __name__ == "__main__":
     scene_list = ["69e5939669", "689fec23D7", "c173f62b15", "55b2bf8036"]
-    scene_id = scene_list[2]
+    scene_id = scene_list[0]
     parser = argparse.ArgumentParser()
     parser.add_argument('--reuse', '-r', default='n', choices=['y', 'n'], help='use constructed graph, y or n')
     args = parser.parse_args()
     reuse_graph_flag = args.reuse == "y"
+    # reuse_graph_flag = True
     run(scene_id, reuse_graph_flag)
     
