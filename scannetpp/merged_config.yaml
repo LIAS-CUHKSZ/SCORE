@@ -72,3 +72,9 @@ dbg:
   # viz obj ids in 2d for each image
   viz_obj_ids: true
   obj_ids: true
+
+###################### best view ######################
+best_view_cache_dir: /data2/scannetppv2/best_view_cache_iphone
+coverage_threshold: 0.99
+split_ratio: 0.9
+num_neighbors: 8

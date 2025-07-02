@@ -48,6 +48,10 @@ python -m semantic.prep.rasterize
 # the obj id of each image will be saved tin `$save_dir_root$/$save_dir$/obj_ids/$scene_id$`, you can use numpy to read it
 # in extract 3d semantic line map code, we will convert object ID to label ID.
 python -m semantic.prep.semantics_2d
+
+
+# split dataset for train and test
+python -m common.split_views merged_config.yaml
 ```
 NOTE: extract semantic labels will take a long time.
 
