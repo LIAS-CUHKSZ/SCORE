@@ -6,8 +6,9 @@
 % Branch:               4 x 1, the given sub-cube.
 % epsilon:              scalar, used in Sat-CM formulation.
 % sample_resolution:    scalar, control resolution for interval analysis.
-% id:                   N x 1, the belonging 2D line id for each matched pair.
-% kernel:               function, saturation function.
+% id:                   L x 1, the belonging 2D line id for each matched pair.
+% kernel_buffer:        M x N, storing saturation function value
+% prox_thres:           scalar, used to cluster similar stabbers
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
@@ -15,7 +16,7 @@
 %%% License: MIT
 
 %%%%
-function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel_buffer)
+function [Q_upper,Q_lower,theta_lower]=Sat_Bounds_FGO(line_pair,Branch,epsilon,sample_resolution,id,kernel_buffer,prox_thres)
 N = line_pair.size;
 %%% calculate lower bound by taking the center point
 % obtain the interval for each matched pair
@@ -37,22 +38,12 @@ if isempty(ids_lower)
     Q_lower = 0;
     theta_lower = 0;
 else
-    [Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buffer);
+    [Q_lower, theta_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buffer,prox_thres);
 end
 %%% calculate upper bound based on rigoros interval anlaysis
 % obtain the interval for each matched pair
 % calculate the extreme values for the h1 and h2 function
-% [h1_upper_,h1_lower_] = h1_interval_mapping(line_pair,Branch,sample_resolution);
-[h1_upper,h1_lower]=h1_violent(line_pair,Branch,sample_resolution);
-% for i = 1:length(h1_upper)
-%     if abs(h1_upper_(i)-h1_upper(i))>0.01
-%         fprintf('UPPER: branch: [%f , %f, %f , %f ], line_id: %d, h1_violent: %f, h1_func: %f\n ',Branch(1),Branch(2),Branch(3),Branch(4),i , h1_upper(i),h1_upper_(i)); % 保留2位小数
-%     end
-%     if abs(h1_lower_(i)-h1_lower(i))>0.01
-%         fprintf('LOWER: branch: [%f , %f, %f , %f ], line_id: %d, h1_violent: %f, h1_func: %f\n ',Branch(1),Branch(2),Branch(3),Branch(4),i , h1_lower(i),h1_lower_(i)); % 保留2位小数
-%     end
-% end
-
+[h1_upper,h1_lower] = h1_interval_mapping(line_pair,Branch,sample_resolution);
 [h2_upper,h2_lower] = h2_interval_mapping(line_pair,Branch,sample_resolution);
 [A_lower,phi_lower,const_lower] = cal_params(line_pair.inner_product,h1_lower,h2_lower);
 [A_upper,phi_upper,const_upper] = cal_params(line_pair.inner_product,h1_upper,h2_upper);
@@ -66,7 +57,7 @@ end
 if isempty(ids_upper)
     Q_upper = 0;
 else
-    [Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buffer);
+    [Q_upper, ~] = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buffer,prox_thres);
 end
 end
 
@@ -80,3 +71,14 @@ function [A,phi,const] = cal_params(product, h1 ,h2)
     const = product+h2;
 end
 
+
+%%% for debugging
+% [h1_upper,h1_lower]=h1_violent(line_pair,Branch,sample_resolution);
+% for i = 1:length(h1_upper)
+%     if abs(h1_upper_(i)-h1_upper(i))>0.01
+%         fprintf('UPPER: branch: [%f , %f, %f , %f ], line_id: %d, h1_violent: %f, h1_func: %f\n ',Branch(1),Branch(2),Branch(3),Branch(4),i , h1_upper(i),h1_upper_(i)); % 保留2位小数
+%     end
+%     if abs(h1_lower_(i)-h1_lower(i))>0.01
+%         fprintf('LOWER: branch: [%f , %f, %f , %f ], line_id: %d, h1_violent: %f, h1_func: %f\n ',Branch(1),Branch(2),Branch(3),Branch(4),i , h1_lower(i),h1_lower_(i)); % 保留2位小数
+%     end
+% end

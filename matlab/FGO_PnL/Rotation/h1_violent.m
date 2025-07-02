@@ -1,5 +1,6 @@
 %%%%
-% Calculate extreme values for h1 within a given sub-cube.
+% Calculate extreme values for h1 within a given sub-cube by tranversing
+% the boundary.
 % h1(u,v,n)  = u'(v \times n)
 
 %%% Inputs:
@@ -7,7 +8,7 @@
 % Branch:               4 x 1, the given sub-cube.
 % sample_resolution:    scalar, control resolution for interval analysis.
 
-%%% Author:  Xiang Zheng   <224045013@link.cuhk.edu.cn>
+%%% Author:  Haodong JIANG <221049033@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
 %%%%

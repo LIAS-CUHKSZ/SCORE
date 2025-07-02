@@ -1,7 +1,7 @@
 % fetched from github repo: https://github.com/tyhuang98/EGO_PnL
 % adaptation: we replace the interval stabbing part with saturated interval stabbing
 % note: adpated lines are marked with %! adapted
-function [Q_upper,Q_lower,stabber_lower]= get_bounds_sat(Point_M,Point_N,B,epsilon,ids,kernel_buff)
+function [Q_upper,Q_lower,stabber_lower]= get_bounds_sat(Point_M,Point_N,B,epsilon,ids,kernel_buff,prox_thres)
 % Point_M: v
 % Point_N: n
 
@@ -36,8 +36,10 @@ for i=1:num
     ids_upper = [ids_upper;ids(i)*ones(length(interval_upper_i)/2,1)]; %! adapted
 end
 
-[Q_lower, stabber_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buff); %! adapted
-[Q_upper, ~]             = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buff); %! adapted
+[Q_lower, stabber_lower] = saturated_interval_stabbing(intervals_lower,ids_lower,kernel_buff,prox_thres); %! adapted
+[Q_upper, ~]             = saturated_interval_stabbing(intervals_upper,ids_upper,kernel_buff,prox_thres); %! adapted
 
 
 end
+
+
