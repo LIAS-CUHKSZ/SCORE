@@ -3,8 +3,12 @@ function [A_all, phi_all, c_all] = get_parameter(Point_M,Point_N, alpha_beta_val
 
 I_3 = [1, 0, 0; 0, 1, 0; 0, 0, 1];
 
-alpha = alpha_beta_value(1);
-beta = alpha_beta_value(2);
+% alpha = alpha_beta_value(1);
+% beta = alpha_beta_value(2);
+
+%! adapted, since different order
+alpha = alpha_beta_value(2);
+beta = alpha_beta_value(1);
 
 r=[sin(beta)*cos(alpha); sin(beta)*sin(alpha); cos(beta)];
 

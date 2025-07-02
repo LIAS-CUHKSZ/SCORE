@@ -1,7 +1,7 @@
 function [alpha, phi,theta] = rot2angle(R)
-        axis =  rotmat2vec3d(R);
-        theta = norm(axis);
-        
+        rot_vec =  rotmat2vec3d(R);
+        theta = norm(rot_vec);
+        axis = rot_vec / theta;
         if axis(1)==0 && axis(2)==0
             phi = 0;
             alpha = acos(axis(3));

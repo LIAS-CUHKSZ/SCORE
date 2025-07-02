@@ -9,23 +9,23 @@
 % epsilon_t :  scalar
 % x_limit   :  scalar
 % branch_yz :  4 x 1
+% vertices  :  2 x 4
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% Version: 1.0
 %%% License: MIT
-%%%%
-function [interval] = trans_upper_interval(n_2D_rot,p_3D,epsilon_t,x_limit,boundary)
+
+function [interval] = trans_upper_interval(n_2D_rot,p_3D,epsilon_t,x_limit,vertices)
     n_x = n_2D_rot(1);
     if n_x<0 %regularization
         n_2D_rot = -n_2D_rot;
         n_x = -n_x;
     end
     n_yz = n_2D_rot(2:3);
-    M = size(boundary,2);
     max_v = -10000; min_v = 10000;
-    for m=1:M
-        yz_sample = boundary(:,m);
-        value = -n_yz*yz_sample;
+    for i=1:4
+        vertex = vertices(i,:);
+        value = -n_yz*vertex';
         max_v = max(value,max_v);
         min_v = min(value,min_v);
     end
