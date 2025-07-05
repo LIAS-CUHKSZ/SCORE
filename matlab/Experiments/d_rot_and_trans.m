@@ -20,20 +20,20 @@ space_size =  room_sizes(scene_idx,:);
 data_folder="csv_dataset/"+dataset_name+"/";
 load(data_folder+"lines3D.mat");
 %%% params
-branch_reso = 0.03; % terminate bnb when branch size <= branch_reso
+branch_reso = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres  = 0.01; %  
 %%% statistics
 column_names=["Image Id","# 2D lines","epsilon_t","Outlier Ratio","Rot Err","Max Trans Err","Min Trans Err","# Trans Candidates","BnB Score","GT Score","time"];
 columnTypes = ["int32","int32","double","double","double","double","double","int32","double","double","double"];
 total_img=2000;
-Record_gt_CM = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 Record_est_CM = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_gt_SCM = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_est_SCM = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_est_SCM_power = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_est_SCM_exp = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_est_SCM_entropy = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 %%% rotation data
-Record_SCM_FGO = load("matlab\Experiments\records\"+dataset_name+"_rotation_record.mat").("Record_SCM_FGO");
-epsilon_rs = Record_SCM_FGO.epsilon_r;
-valid_idx = Record_SCM_FGO{:,1}; % These images have passed the rotation ambiguity test.
+Rotation_Record = load("matlab\Experiments\records\"+dataset_name+"_rotation_record.mat").("Record_SCM_FGO_entropy");
+epsilon_rs = Rotation_Record.epsilon_r;
+valid_idx = Rotation_Record{:,1}; % These images have passed the rotation ambiguity test.
 %% 
 parfor num =1:length(valid_idx)
     % ---------------------------------------------------------------------
@@ -61,81 +61,83 @@ parfor num =1:length(valid_idx)
     % --- 3. semantic matching and saturation function design ---
     lines3D_sub = lines3D(retrived_3D_line_idx,:); % retrived sub-map
     [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D_sub);  
-    epsilon_r = epsilon_rs(num);
-    epsilon_t = max(lines2D(:,11))+0.001;
-    
+    epsilon_r = epsilon_rs(num);    epsilon_t = max(lines2D(:,11))+0.001;
     % ---------------------------------------------------------------------
     % --- 4. localization with ground truth rotation ---
-    R_opt = R_gt;
-    [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,score_t_gt_CM,kernel_buff_SCM,score_t_gt_SCM] = ...
+    rot_vec = Rotation_Record.("Rot Vec"){num,:};
+    R_opt = rotvec2mat3d(rot_vec);
+    time_rot = Rotation_Record.Time(num);
+    Err_rot = Rotation_Record.("Max Rot Err")(num);
+    [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,score_t_gt_CM,kernel_buff_SCM_entropy,score_t_gt_SCM_entropy] = ...
         under_specific_rot(num_2D_lines,ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r,t_gt,epsilon_t,intrinsic);
-    kernel_buff_SCM_trunc = kernel_buff_SCM;
-    kernel_buff_SCM_trunc(:,2:end)=0;
+    M = size(kernel_buff_SCM_entropy,1); N =  size(kernel_buff_SCM_entropy,2);
+    kernel_buff_SCM_power = zeros(M,N); kernel_buff_SCM_exp =  zeros(M,N);
+    for i = 1:M
+        for j = 1:M
+            kernel_buff_SCM_power(i,j) = j^(-8);
+            kernel_buff_SCM_exp(i,j) = 2^(-j);
+        end
+    end
+    kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
+    kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
     %%% CM    
     [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,space_size,branch_reso,epsilon_t,prox_thres);
-    % prune candidates according to physical constraints
+    % prune candidates according to geometric constraints
     [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_CM);
-    if num_candidate ~= size(t_best_candidates,2)
-       fprintf("%d candidates pruned to %d \n",num_candidate,size(t_best_candidates,2));
-       num_candidate = size(t_best_candidates,2);
-    end
+    num_candidate = size(t_best_candidates,2);
     [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
-    Record_gt_CM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),0,max_err,min_err,num_candidate,best_score,score_t_gt_CM,time};
-    %%% Sat-CM 
-    [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_trunc,space_size,branch_reso,epsilon_t,prox_thres);
-    % prune candidates according to physical constraints
-    [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM);
-    if num_candidate ~= size(t_best_candidates,2)
-       fprintf("%d candidates pruned to %d \n",num_candidate,size(t_best_candidates,2));
-       num_candidate = size(t_best_candidates,2);
-    end
+    Record_est_CM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),Err_rot,max_err,min_err,num_candidate,best_score,score_t_gt_CM,time+time_rot};
+
+    %%% Sat-CM: power + geo 
+    [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_power,space_size,branch_reso,epsilon_t,prox_thres);
+    % prune candidates according to geometric constraints
+    [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_power);
+    num_candidate = size(t_best_candidates,2);
     [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
-    Record_gt_SCM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),0,max_err,min_err,num_candidate,best_score,score_t_gt_SCM,time};
+    Record_est_SCM_power(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),Err_rot,max_err,min_err,num_candidate,best_score,score_t_gt_SCM_entropy,time+time_rot};
     
-    % % ---------------------------------------------------------------------
-    % % --- 5. localization with estimated rotation ---
-    % rot_vec = Record_SCM_FGO.("Rot Vec"){num,:};
-    % R_opt = rotvec2mat3d(rot_vec);
-    % [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,score_t_gt_CM,kernel_buff_SCM,score_t_gt_SCM] = ...
-    %     under_specific_rot(num_2D_lines,ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r,t_gt,epsilon_t,intrinsic);
-    % kernel_buff_SCM_trunc = kernel_buff_SCM;
-    % kernel_buff_SCM_trunc(:,2:end)=0;
-    % %%% CM
-    % [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,space_size,branch_reso,epsilon_t,prox_thres);
-    % % prune candidates according to physical constraints
-    % [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_CM);
-    % if num_candidate ~= size(t_best_candidates,2)
-    %    fprintf("%d candidates pruned to %d \n",num_candidate,size(t_best_candidates,2));
-    %    num_candidate = size(t_best_candidates,2);
-    % end
-    % [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
-    % Record_est_CM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),0,max_err,min_err,num_candidate,best_score,score_t_gt_CM,time};
-    % %%% SCM
-    % [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_trunc,space_size,branch_reso,epsilon_t,prox_thres);
-    % % prune candidates according to physical constraints
-    % [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM);
-    % if num_candidate ~= size(t_best_candidates,2)
-    %    fprintf("%d candidates pruned to %d \n",num_candidate,size(t_best_candidates,2));
-    %    num_candidate = size(t_best_candidates,2);
-    % end
-    % [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
-    % Record_est_SCM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),0,max_err,min_err,num_candidate,best_score,score_t_gt_SCM,time};
+    %%% Sat-CM: exp + geo 
+    [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_exp,space_size,branch_reso,epsilon_t,prox_thres);
+    % prune candidates according to geometric constraints
+    [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_exp);
+    num_candidate = size(t_best_candidates,2);
+    [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
+    Record_est_SCM_exp(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),Err_rot,max_err,min_err,num_candidate,best_score,score_t_gt_SCM_entropy,time+time_rot};
+    
+    %%% Sat-CM: entropy + geo 
+    [t_best_candidates,best_score,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_entropy,space_size,branch_reso,epsilon_t,prox_thres);
+    % prune candidates according to geometric constraints
+    [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_entropy);
+    num_candidate = size(t_best_candidates,2);
+    [min_err,max_err,t_min]=min_max_trans_error(num_candidate,t_best_candidates,t_gt);
+    Record_est_SCM_entropy(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),Err_rot,max_err,min_err,num_candidate,best_score,score_t_gt_SCM_entropy,time+time_rot};
 end
-Record_gt_CM(Record_gt_CM.("BnB Score")==0,:)=[];
 Record_est_CM(Record_est_CM.("BnB Score")==0,:)=[];
-Record_gt_SCM(Record_gt_SCM.("BnB Score")==0,:)=[];
-Record_est_SCM(Record_est_SCM.("BnB Score")==0,:)=[];
+Record_est_SCM_power(Record_est_SCM_power.("BnB Score")==0,:)=[];
+Record_est_SCM_exp(Record_est_SCM_exp.("BnB Score")==0,:)=[];
+Record_est_SCM_entropy(Record_est_SCM_entropy.("BnB Score")==0,:)=[];
 %%
 fprintf("============ statistics ============\n")
-fprintf("num of valid images: %d\n",height(Record_gt_CM));
-fprintf("num of re-localized images ( < 20 cm):\n")
-fprintf("CM_gt_FGO: %d \n",length(find(Record_gt_CM.("Max Trans Err")<0.2)))
-fprintf("CM_est_FGO: %d \n",length(find(Record_est_CM.("Max Trans Err")<0.2)))
-fprintf("SCM_gt_FGO: %d \n",length(find(Record_gt_SCM.("Max Trans Err")<0.2)))
-fprintf("SCM_est_FGO: %d \n",length(find(Record_est_SCM.("Max Trans Err")<0.2)))
-output_filename= "./matlab/Experiments/records/"+dataset_name+"_translation_record.mat";
-% save(output_filename);
-% Record_gt_SCM(Record_gt_SCM.("# 2D lines")<Record_gt_SCM.("GT Score"),:)=[];
+fprintf("num of valid images: %d\n",height(Record_est_CM));
+fprintf("num of re-localized images ( < 10 cm):\n")
+fprintf("CM_est_FGO: %d \n",length(find(Record_est_CM.("Max Trans Err")<0.1)))
+fprintf("SCM_est_FGO_power: %d \n",length(find(Record_est_SCM_power.("Max Trans Err")<0.1)))
+fprintf("SCM_est_FGO_exp: %d \n",length(find(Record_est_SCM_exp.("Max Trans Err")<0.1)))
+fprintf("SCM_est_FGO_entropy: %d \n",length(find(Record_est_SCM_entropy.("Max Trans Err")<0.1)))
+output_filename= "./matlab/Experiments/records/"+dataset_name+"_rot_trans_record.mat";
+save(output_filename);
+%%
+fprintf("============ total time~(rot + trans) statistics ============\n")
+fprintf("CM_est_FGO: %f,%f,%f\n",quantile(Record_est_CM.("time"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_power: %f,%f,%f\n",quantile(Record_est_SCM_power.("time"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_exp: %f,%f,%f\n",quantile(Record_est_SCM_exp.("time"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_entropy: %f,%f,%f\n",quantile(Record_est_SCM_entropy.("time"),[0.25,0.5,0.75]))
+
+fprintf("============ max trans err statistics ============\n")
+fprintf("CM_est_FGO: %f,%f,%f\n",quantile(Record_est_CM.("Max Trans Err"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_power: %f,%f,%f\n",quantile(Record_est_SCM_power.("Max Trans Err"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_exp: %f,%f,%f\n",quantile(Record_est_SCM_exp.("Max Trans Err"),[0.25,0.5,0.75]))
+fprintf("SCM_est_FGO_entropy: %f,%f,%f\n",quantile(Record_est_SCM_entropy.("Max Trans Err"),[0.25,0.5,0.75]))
 
 % ---------------------------------------------------------------------
 % --- sub-functions ---

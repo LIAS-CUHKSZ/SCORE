@@ -10,7 +10,7 @@
 clear;
 clc;
 dataset_ids = ["69e5939669","55b2bf8036","c173f62b15","689fec23d7"];
-dataset_idx = dataset_ids(1);
+dataset_idx = dataset_ids(2);
 data_folder="csv_dataset/"+dataset_idx+"/";
 load(data_folder+"lines3D.mat");
 %%% statistics
@@ -19,16 +19,19 @@ column_names=...
     ["Image ID","# 2D lines","epsilon_r","Outlier Ratio","Max Rot Err","Min Rot Err","# Rot Candidates","Best Score","GT Score","Time","Rot Vec"];
 columnTypes =...
     ["int32","int32","double","double","double","double","int32","double","double","double","cell"];
+% Record_CM_EGO     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+% Record_SCM_EGO_entropy     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 Record_CM_FGO     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_SCM_FGO     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_CM_EGO     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-Record_SCM_EGO     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_exp       =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_power     =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+Record_SCM_FGO_entropy   =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
+
 %%%  params
 prox_thres = 1*pi/180; % for clustering proximate stabbers
-branch_reso = pi/512; % terminate bnb when branch size < branch_reso
-sample_reso = pi/512; % resolution for interval analysis
+branch_reso = pi/256; % terminate bnb when branch size < branch_reso
+sample_reso = pi/256; % resolution for interval analysis
 %%
-for num =0:2000
+parfor num = 0:2000
     % ---------------------------------------------------------------------
     % --- 1. load data ---
     img_idx=num*10;     
@@ -49,6 +52,10 @@ for num =0:2000
     % --- 2. check observability using ground truth matching ---
     with_match_idx = find(lines2D(:,9)>=0);
     M = length(with_match_idx);
+    if M < 4
+       fprintf("image "+num2str(img_idx)+" is ambigious in rotation, skip.\n");
+       continue
+    end
     n_2D_gt = zeros(M,3);  v_3D_gt = zeros(M,3); residual_r = zeros(M,1);
     for i=1:M
         matched_idx = int32(lines2D(with_match_idx(i),9))+1;
@@ -80,14 +87,20 @@ for num =0:2000
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
-    kernel_buff_SCM = zeros(num_2D_lines,max(match_count));
+    kernel_buff_SCM_power   = zeros(num_2D_lines,max(match_count));
+    kernel_buff_SCM_exp     = zeros(num_2D_lines,max(match_count));
+    kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
-        kernel_buff_SCM(i,1)=1;
+        kernel_buff_SCM_entropy(i,1)=1;
         for j = 2:match_count(i)
-            kernel_buff_SCM(i,j)=log(j)-log(j-1);
+            kernel_buff_SCM_power(i,j) = j^(-8);
+            kernel_buff_SCM_exp(i,j)=2^(-j);
+            kernel_buff_SCM_entropy(i,j)=log(j)-log(j-1);
         end
     end
-    kernel_buff_SCM(:,2:end)=kernel_buff_SCM(:,2:end)/sum(sum(kernel_buff_SCM(:,2:end)));
+    kernel_buff_SCM_power(:,2:end)=kernel_buff_SCM_power(:,2:end)/sum(sum(kernel_buff_SCM_power(:,2:end)));
+    kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
+    kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
     kernel_buff_CM=ones(num_2D_lines,max(match_count));
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
@@ -101,40 +114,74 @@ for num =0:2000
         branch_reso,epsilon_r,sample_reso,prox_thres);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
     Record_CM_FGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
-    % CM_EGO
-
-    [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotEGO(n_2D,v_3D,ids,kernel_buff_CM,...
-        branch_reso,epsilon_r,prox_thres);
-    [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_CM_EGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+    % % CM_EGO
+    % 
+    % [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotEGO(n_2D,v_3D,ids,kernel_buff_CM,...
+    %     branch_reso,epsilon_r,prox_thres);
+    % [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
+    % Record_CM_EGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 
     % ---------------------------------------------------------------------
     % --- 5. estimate rotation with Saturated Consensus Maximization  ---
-    gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM);
-    % SCM_FGO
+    % SCM_FGO_power
+    gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_power);
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM,...
+        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_power,...
         branch_reso,epsilon_r,sample_reso,prox_thres);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_SCM_FGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
-    % SCM_EGO
-    [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotEGO(n_2D,v_3D,ids,kernel_buff_SCM,...
-        branch_reso,epsilon_r,prox_thres);
+    Record_SCM_FGO_power(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+
+    % SCM_FGO_exp
+    gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_exp);
+    [R_opt_top,best_score,num_candidate,time,~,~] = ...
+        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_exp,...
+        branch_reso,epsilon_r,sample_reso,prox_thres);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_SCM_EGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+    Record_SCM_FGO_exp(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+
+    % SCM_FGO_entropy
+    gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_entropy);
+    [R_opt_top,best_score,num_candidate,time,~,~] = ...
+        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_entropy,...
+        branch_reso,epsilon_r,sample_reso,prox_thres);
+    [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
+    Record_SCM_FGO_entropy(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+
+
+    % % SCM_EGO_entropy
+    % [R_opt_top,best_score,num_candidate,time,~,~] = Sat_RotEGO(n_2D,v_3D,ids,kernel_buff_SCM_entropy,...
+    %     branch_reso,epsilon_r,prox_thres);
+    % [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
+    % Record_SCM_EGO_entropy(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 end
+% Record_CM_EGO(Record_CM_EGO.("Best Score")==0,:)=[];
+% Record_SCM_EGO_entropy(Record_SCM_EGO.("Best Score")==0,:)=[];
 Record_CM_FGO(Record_CM_FGO.("Best Score")==0,:)=[];
-Record_CM_EGO(Record_CM_EGO.("Best Score")==0,:)=[];
-Record_SCM_FGO(Record_SCM_FGO.("Best Score")==0,:)=[];
-Record_SCM_EGO(Record_SCM_EGO.("Best Score")==0,:)=[];
+Record_SCM_FGO_power(Record_SCM_FGO_power.("Best Score")==0,:)=[];
+Record_SCM_FGO_exp(Record_SCM_FGO_exp.("Best Score")==0,:)=[];
+Record_SCM_FGO_entropy(Record_SCM_FGO_entropy.("Best Score")==0,:)=[];
 %%
 fprintf("============ statistics ============\n")
-fprintf("num of valid images: %d\n",height(Record_SCM_FGO));
+fprintf("num of valid images: %d\n",height(Record_SCM_FGO_entropy));
 fprintf("num of re-localized images (rot err < 10 degrees):\n")
-fprintf("CM_EGO: %d \n",length(find(Record_CM_EGO.("Max Rot Err")<10)))
+% fprintf("CM_EGO: %d \n",length(find(Record_CM_EGO.("Max Rot Err")<10)))
+% fprintf("SCM_EGO_entropy: %d \n",length(find(Record_SCM_EGO.("Max Rot Err")<10)))
 fprintf("CM_FGO: %d \n",length(find(Record_CM_FGO.("Max Rot Err")<10)))
-fprintf("SCM_FGO: %d \n",length(find(Record_SCM_FGO.("Max Rot Err")<10)))
-fprintf("SCM_EGO: %d \n",length(find(Record_SCM_EGO.("Max Rot Err")<10)))
+fprintf("SCM_FGO_power: %d \n",length(find(Record_SCM_FGO_power.("Max Rot Err")<10)))
+fprintf("SCM_FGO_exp: %d \n",length(find(Record_SCM_FGO_exp.("Max Rot Err")<10)))
+fprintf("SCM_FGO_entropy: %d \n",length(find(Record_SCM_FGO_entropy.("Max Rot Err")<10)))
 % Record_large_Error = Record_SCM_FGO(Record_SCM_FGO.("Max Rot Err")>10,:);
-% output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
-% save(output_filename);
+output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+save(output_filename);
+%%
+fprintf("============ time statistics ============\n")
+fprintf("CM_FGO: %f,%f,%f\n",quantile(Record_CM_FGO.("Time"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_power: %f,%f,%f\n",quantile(Record_SCM_FGO_power.("Time"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_exp: %f,%f,%f\n",quantile(Record_SCM_FGO_exp.("Time"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(Record_SCM_FGO_entropy.("Time"),[0.25,0.5,0.75]))
+
+fprintf("============ max rot err statistics ============\n")
+fprintf("CM_FGO: %f,%f,%f\n",quantile(Record_CM_FGO.("Max Rot Err"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_power: %f,%f,%f\n",quantile(Record_SCM_FGO_power.("Max Rot Err"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_exp: %f,%f,%f\n",quantile(Record_SCM_FGO_exp.("Max Rot Err"),[0.25,0.5,0.75]))
+fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(Record_SCM_FGO_entropy.("Max Rot Err"),[0.25,0.5,0.75]))
