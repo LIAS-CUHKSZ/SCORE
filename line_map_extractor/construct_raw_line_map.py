@@ -35,9 +35,8 @@ def load_config(data_root_dir,output_root_dir,scene_id):
         'data_root_dir': data_root_dir,
         'output_root_dir': output_root_dir,
         'scene_id': scene_id,
-        'train_list': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/train.txt"),
-        # 'train_list': os.path.join(data_root_dir, f"best_view_cache_iphone/iphone/{scene_id}_train.txt"),
-        'rgb_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/rgb/kept_images/"),
+        'ref_list': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/ref.txt"),
+        'rgb_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/rgb/"),
         'depth_image_folder': os.path.join(data_root_dir, f"data/{scene_id}/iphone/render_depth/"),
         'pose_file': os.path.join(data_root_dir, f"data/{scene_id}/iphone/colmap/images.txt"),
         'intrinsic_file': os.path.join(data_root_dir, f"data/{scene_id}/iphone/colmap/cameras.txt"),
@@ -48,9 +47,9 @@ def load_config(data_root_dir,output_root_dir,scene_id):
     }
     # Setup output directories
     config.update({
-        'line_image_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/rgb_line_image/"),
-        'line_mesh_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/line_mesh/"),
-        'line_data_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/build/")
+        'line_image_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/map/rgb_line_image/"),
+        'line_mesh_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/map/line_mesh/"),
+        'line_data_folder': os.path.join(output_root_dir, f"line_map_extractor/out/{scene_id}/map/")
     })
     # Create output directories
     for out_path in [config['line_image_folder'], config['line_mesh_folder'], config['dictionary_folder']]:
@@ -112,14 +111,14 @@ def process_id_remapping(config):
 
     return id_remapping
 
-def load_image_lists(config):
+def load_ref_image_lists(config):
     """Load images with both rgb and depth data"""
     depth_img_list = sorted(glob.glob(config['depth_image_folder'] + "*.png"))
     rgb_img_list = sorted(glob.glob(config['rgb_folder'] + "*.jpg"))
-    with open(config['train_list'], "r") as f:
-        train_list = f.readlines()
-    train_list = [line.strip() for line in train_list]
-    rgb_img_list = [img for img in rgb_img_list if os.path.basename(img) in train_list]
+    with open(config['ref_list'], "r") as f:
+        ref_list = f.readlines()
+    ref_list = [line.strip() for line in ref_list]
+    rgb_img_list = [img for img in rgb_img_list if os.path.basename(img) in ref_list]
     # depth_img_list = depth_img_list[::2]  # downsample
     # Remove depth images without corresponding RGB images
     k = 0
@@ -131,7 +130,6 @@ def load_image_lists(config):
             depth_img_list.remove(depth_img_name)
         else:
             k += 1
-            
     return depth_img_list
 
 def process_file(depth_img_name, config, pose_data, id_remapping):
@@ -160,7 +158,7 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
     rgb_img = cv2.imread(rgb_file)
 
     # Extract and Prune 2D Line segments
-    segments = helper.extract_and_prune_2Dlines(gray_img, helper.params_2D_build)
+    segments = helper.extract_and_prune_2Dlines(gray_img, helper.params_2D_map)
     line_2D_count = 0  # valid 2D line id in the cur image
 
     for j, segment in enumerate(segments):
@@ -190,7 +188,7 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
 
         # Get the foreground points by multi-hypothesis perturbation
         depth_mean, xyz_list, foreground_idices, background_flag = helper.perturb_and_extract(
-            x, y, render_depth, v, helper.params_2D_build["num_hypo"]*2+1
+            x, y, render_depth, v, helper.params_2D_map["num_hypo"]*2+1
         )
         if np.min(depth_mean) == 255:  # no valid points
             continue
@@ -202,8 +200,8 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
         semantic_id = helper.extract_dominant_id(foreground_y, foreground_x, obj_ids, config['objId_id_dict'])
 
         # Check adjacent hypotheses
-        while (best_one < helper.params_2D_build["num_hypo"]):
-            if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2D_build["background_depth_diff_thresh"]:
+        while (best_one < helper.params_2D_map["num_hypo"]):
+            if depth_mean[best_one+1]-depth_mean[best_one] > helper.params_2D_map["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one+1][foreground_idices[best_one+1],0].astype(np.int32)
             foreground_y = xyz_list[best_one+1][foreground_idices[best_one+1],1].astype(np.int32)
@@ -213,8 +211,8 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
             else:
                 break
 
-        while (best_one > helper.params_2D_build["num_hypo"]):
-            if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2D_build["background_depth_diff_thresh"]:
+        while (best_one > helper.params_2D_map["num_hypo"]):
+            if depth_mean[best_one-1]-depth_mean[best_one] > helper.params_2D_map["background_depth_diff_thresh"]:
                 break
             foreground_x = xyz_list[best_one-1][foreground_idices[best_one-1],0].astype(np.int32)
             foreground_y = xyz_list[best_one-1][foreground_idices[best_one-1],1].astype(np.int32)
@@ -252,7 +250,7 @@ def process_file(depth_img_name, config, pose_data, id_remapping):
 
         # Check inlier count
         inlier_points = points_world_3D[np.where(inliers == True)]
-        if len(inlier_points) < helper.params_2D_build["line_points_num_thresh"]:
+        if len(inlier_points) < helper.params_2D_map["line_points_num_thresh"]:
             continue
 
         # Get line parameters
@@ -375,7 +373,7 @@ def aggregate_results(results, pose_data):
     
     # Add metadata
     scene_data.update({
-        'params_2D_build': helper.params_2D_build
+        'params_2D_map': helper.params_2D_map
     })
     
     return scene_data
@@ -411,7 +409,7 @@ def main(data_root_dir,output_root_dir,scene_id):
     id_remapping = process_id_remapping(config)
     
     # Load image lists
-    depth_img_list = load_image_lists(config)
+    depth_img_list = load_ref_image_lists(config)
     
     # Load pose data
     pose_data = {}

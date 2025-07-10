@@ -24,24 +24,24 @@ root_dir = "/data1/home/lucky/IROS25"
 scene_list = ["69e5939669"]
 for i in range(0,len(scene_list)):
     scene_id = scene_list[i]
-    data_path_map = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/build/"+scene_id+f"_results_merged.npy"
+    data_path_map = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/map/"+scene_id+f"_results_merged.npy"
     data_map = np.load(data_path_map, allow_pickle=True).item()
-    data_path_test = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/test/"+scene_id+f"_test_data.npy"
-    # data_path_test = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/build/"+scene_id+f"_results_merged.npy"
-    data_test = np.load(data_path_test, allow_pickle=True).item()
+    data_path_query = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/query/"+scene_id+f"_query_data.npy"
+    data_query = np.load(data_path_query, allow_pickle=True).item()
     #
     merged_semantic_ids_3D = data_map['merged_semantic_ids_3D']
     merged_end_points_3D= data_map['merged_end_points_3D']
     #
-    poses_all = data_test['scene_pose']
-    intrinsics_all = data_test['scene_intrinsic']
-    scene_line_2D_params = data_test['scene_line_2D_params']
-    scene_line_2D_semantic_ids = data_test['scene_line_2D_semantic_ids']
-    scene_line_2D_match_idx = data_test['scene_line_2D_match_idx']
-    retrived_3D_line_idx = data_test['scene_retrived_3D_line_idx']
-    line_2D_points = data_test['scene_line_2D_end_points']
-    scene_proj_error_r = data_test['scene_proj_error_r']
-    scene_proj_error_t = data_test['scene_proj_error_t']
+    poses_all = data_query['scene_pose']
+    intrinsics_all = data_query['scene_intrinsic']
+    scene_line_2D_params = data_query['scene_line_2D_params']
+    scene_line_2D_semantic_ids = data_query['scene_line_2D_semantic_ids']
+    scene_line_2D_match_idx = data_query['scene_line_2D_match_idx']
+    retrived_3D_line_idx = data_query['scene_retrived_3D_line_idx']
+    retrived_poses = data_query['scene_retrived_poses']
+    line_2D_points = data_query['scene_line_2D_end_points']
+    scene_proj_error_r = data_query['scene_proj_error_r']
+    scene_proj_error_t = data_query['scene_proj_error_t']
     #
     ### save path
     base_path = root_dir+f"/SCORE/csv_dataset/"+scene_id+"/"

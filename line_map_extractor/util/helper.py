@@ -15,7 +15,7 @@ from util.check_line_rect import check_line_rect
 thread_number = 32
 
 # parameters for line_extractor_pt1
-params_2D_build = {                          
+params_2D_map = {                          
     # for 2D line extractor
     "sigma": 1,
     "gradientThreshold": 30,                 # tune this to filter weak 2D lines
@@ -43,7 +43,7 @@ params_merge_prune = {
     "degree_threshold": 2,                       # tune this
 }
 
-params_test = params_2D_build
+params_query = params_2D_map
 
 
 def extract_dominant_id(y,x,obj_ids,objId_id_dict):
@@ -55,7 +55,7 @@ def extract_dominant_id(y,x,obj_ids,objId_id_dict):
     all_points_semantic_id = np.array(all_points_semantic_id)
     unique_ids, counts = np.unique(all_points_semantic_id, return_counts=True)
     semantic_id = 0
-    if np.max(counts) > params_2D_build["line_points_num_thresh"]:
+    if np.max(counts) > params_2D_map["line_points_num_thresh"]:
         # get the most frequent label
         semantic_id = unique_ids[np.argmax(counts)] 
     return semantic_id
@@ -131,12 +131,12 @@ def get_foreground_points(valid_z):
     if len(np.unique(kmeans.labels_))==1:
         return foreground_idx,depth_mean,background_flag   
     # the points have distinct depth
-    if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2D_build["background_depth_diff_thresh"]:
+    if centers[0]>centers[1] and min(depth_cluster_0)-max(depth_cluster_1) > params_2D_map["background_depth_diff_thresh"]:
         # there is a depth leap between two clusters
         depth_mean=centers[1][0]
         foreground_idx = np.where(kmeans.labels_ == 1)[0]
         background_flag=True
-    if  centers[1]>centers[0] and min(depth_cluster_1)-max(depth_cluster_0) > params_2D_build["background_depth_diff_thresh"]:
+    if  centers[1]>centers[0] and min(depth_cluster_1)-max(depth_cluster_0) > params_2D_map["background_depth_diff_thresh"]:
         # there is a depth leap between two clusters
         depth_mean=centers[0][0]
         foreground_idx = np.where(kmeans.labels_ == 0)[0]
@@ -145,7 +145,7 @@ def get_foreground_points(valid_z):
 
 def perturb_and_extract(x,y,render_depth,v,num_hypo):
     # perturb the 2D line and extract different 3D points
-    move_length_list = np.linspace(-1,1,num_hypo)*params_2D_build["perturb_length"]
+    move_length_list = np.linspace(-1,1,num_hypo)*params_2D_map["perturb_length"]
     background_flag = []
     depth_mean = []
     xyz_list = []
@@ -175,7 +175,7 @@ def perturb_and_extract(x,y,render_depth,v,num_hypo):
         valid_y = y_perturbed[np.where(z_perturbed != 0)]
         xyz_list.append(np.concatenate([valid_x[:, None], valid_y[:, None], valid_z[:, None]], axis=1))
         foreground_idx = list(range(len(valid_z)))
-        if len(valid_z)>params_2D_build["line_points_num_thresh"]:
+        if len(valid_z)>params_2D_map["line_points_num_thresh"]:
             foreground_idx,depth_mean[k],background_flag[k] = get_foreground_points(valid_z)
         foreground_idices.append(foreground_idx)
     return depth_mean,xyz_list,foreground_idices,background_flag

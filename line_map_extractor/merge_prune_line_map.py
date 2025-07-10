@@ -18,10 +18,12 @@ import os
 import numpy as np
 import open3d as o3d
 import argparse
+import struct
 from joblib import Parallel, delayed
 from scipy import stats
 from tqdm import tqdm
 from util import helper
+from scipy.spatial.transform import Rotation
 
 class LineStates:
     """Holds all input data."""
@@ -29,13 +31,16 @@ class LineStates:
         self.scene_id = scene_id
         self.root_dir = "/data1/home/lucky/IROS25/"
         self.scene_data_path = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/{scene_id}_results_raw.npy"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/map/{scene_id}_results_raw.npy"
         )
         self.line_data_folder = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/map/"
         )
         self.line_mesh_folder = os.path.join(
-            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/build/line_mesh/"
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/map/line_mesh/"
+        )
+        self.sfm_data_folder = os.path.join(
+            self.root_dir, f"SCORE/line_map_extractor/out/{scene_id}/map/sfm/"
         )
         self.ensure_dirs()
         self.load_scene_data()
@@ -45,10 +50,9 @@ class LineStates:
         self.scene_proj_error_r = {}
         self.scene_proj_error_t = {}
         self.scene_line_2D_match_idx = {}
-        self.retrived_3D_line_idx = {}
 
     def ensure_dirs(self):
-        for out_path in [self.line_data_folder, self.line_mesh_folder]:
+        for out_path in [self.line_data_folder, self.line_mesh_folder, self.sfm_data_folder]:
             if not os.path.exists(out_path):
                 os.makedirs(out_path)
 
@@ -174,18 +178,18 @@ def merge_lines(state):
             for neighbor in neighbors:
                 if label == state.scene_line_3D_semantic_ids[neighbor]:
                     mapping[neighbor] = len(state.merged_semantic_ids_3D) - 1
-        # Debug: output the 3D line with more than 3 semantic labels
-        if len(unique_cluster_semantic_ids) > 3:
-            point_diff = end_points[1] - end_points[0]
-            point_sets = [end_points[0] + point_diff * sample / 299 for sample in range(300)]
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(point_sets)
-            o3d.io.write_point_cloud(
-                os.path.join(state.line_mesh_folder, f"multiple_semantic_{countt}.ply"), pcd
-            )
-            countt += 1
-            for k in range(len(unique_cluster_semantic_ids)):
-                print(f"{state.id_label_dict[unique_cluster_semantic_ids[k]]},", end="")
+        # # Debug: output the 3D line with more than 3 semantic labels
+        # if len(unique_cluster_semantic_ids) > 3:
+        #     point_diff = end_points[1] - end_points[0]
+        #     point_sets = [end_points[0] + point_diff * sample / 299 for sample in range(300)]
+        #     pcd = o3d.geometry.PointCloud()
+        #     pcd.points = o3d.utility.Vector3dVector(point_sets)
+        #     o3d.io.write_point_cloud(
+        #         os.path.join(state.line_mesh_folder, f"multiple_semantic_{countt}.ply"), pcd
+        #     )
+        #     countt += 1
+        #     for k in range(len(unique_cluster_semantic_ids)):
+        #         print(f"{state.id_label_dict[unique_cluster_semantic_ids[k]]},", end="")
     print("# 3D lines after merging:", len(state.merged_end_points_3D))
     return mapping
 
@@ -278,24 +282,6 @@ def save_merged_line(state, sample_num):
                 os.path.join(state.line_mesh_folder, f"{state.id_label_dict[int(semantic_id)]}.ply"), pcd
             )
 
-def retrive_3D_line_idx(state):
-    """
-    Retrives the 3D line indices for each 2D line.
-    """
-    keys = list(state.scene_line_2D_match_idx.keys())
-    for i in range(len(keys)):
-        basename = keys[i]
-        retrived_3D_line_idx = []
-        for j in range(max(0, i-5), min(len(keys), i+6)):
-            line_3D_match_idx = []
-            line_2D_match_idx = state.scene_line_2D_match_idx[keys[j]]
-            for k in range(len(line_2D_match_idx)):
-                if not np.isnan(line_2D_match_idx[k]):
-                    line_3D_match_idx.append(line_2D_match_idx[k])
-            retrived_3D_line_idx = np.concatenate([retrived_3D_line_idx, line_3D_match_idx])
-        retrived_3D_line_idx = np.unique(retrived_3D_line_idx).astype(np.int32)
-        state.retrived_3D_line_idx[basename] = retrived_3D_line_idx
-
 def save_results(state):
     """
     Saves all merged and processed data to a numpy file.
@@ -312,12 +298,61 @@ def save_results(state):
             "scene_line_2D_match_idx": state.scene_line_2D_match_idx,
             "scene_proj_error_r": state.scene_proj_error_r,
             "scene_proj_error_t": state.scene_proj_error_t,
-            "retrived_3D_line_idx": state.retrived_3D_line_idx,
             "merged_semantic_ids_3D": state.merged_semantic_ids_3D,
             "merged_end_points_3D": state.merged_end_points_3D,
             "params_merge_prune": helper.params_merge_prune,
         }
     )
+
+def output_colmap_format(state):
+    """
+    Outputs the line map in COLMAP format.
+    ""camera.bin""  directly copied from the original COLMAP output
+    ""lines3D.bin"" line ID, two endpoints, semantic label
+    ""images.bin""  Image name, qw, qx, qy, qz, tx, ty, tz, associated 3D line IDs
+    """
+    # 0. output camera.bin
+    # directly copied from the original COLMAP output, omitted here
+    # 1. output lines3D.bin
+    lines3D_bin_path = os.path.join(state.sfm_data_folder, "lines3D.bin")
+    with open(lines3D_bin_path, "wb") as f:
+        # total number of lines
+        f.write(struct.pack("I", len(state.merged_semantic_ids_3D)))
+        for i in range(len(state.merged_semantic_ids_3D)):
+            end_points = state.merged_end_points_3D[i]
+            line_id = i
+            semantic_label = state.merged_semantic_ids_3D[i]
+            semantic_label = int(semantic_label)
+            f.write(struct.pack("I", line_id))
+            f.write(struct.pack("3f", end_points[0][0], end_points[0][1], end_points[0][2]))
+            f.write(struct.pack("3f", end_points[1][0], end_points[1][1], end_points[1][2]))
+            f.write(struct.pack("I", semantic_label))
+
+    # 2. output images.bin  
+    images_bin_path = os.path.join(state.sfm_data_folder, "images.bin")
+    with open(images_bin_path, "wb") as f:
+        # total number of images
+        f.write(struct.pack("I", len(state.scene_line_2D_match_idx.keys())))
+        for key in state.scene_line_2D_match_idx.keys():
+            # image name
+            image_name = key.split(".")[0]
+            f.write(struct.pack("s", image_name.encode()))
+            # poses
+            pose_matrix = np.array(state.scene_pose[key])
+            tx, ty, tz = pose_matrix[:3, 3]
+            qx, qy, qz, qw = Rotation.from_matrix(pose_matrix[:3, :3]).as_quat()
+            f.write(struct.pack("4f", qx, qy, qz, qw))
+            f.write(struct.pack("3f", tx, ty, tz))
+            # number of associated 3D line IDs
+            line_2D_match_idx = np.array(state.scene_line_2D_match_idx[key])
+            line_2D_match_idx = line_2D_match_idx[~np.isnan(line_2D_match_idx)]
+            num_matched_line = len(line_2D_match_idx)
+            f.write(struct.pack("I", num_matched_line))
+            # associated 3D line IDs
+            for i in range(num_matched_line):
+                line_id = line_2D_match_idx[i]
+                line_id = int(line_id)
+                f.write(struct.pack("I", line_id))
 
 def run(scene_id, reuse_graph_flag):
     state = LineStates(scene_id)
@@ -327,11 +362,11 @@ def run(scene_id, reuse_graph_flag):
         construct_graph(state)
     mapping = merge_lines(state)
     update_err(state, mapping)
-    retrive_3D_line_idx(state)
     save_results(state)
     sample_num = 300
     save_merged_line(state, sample_num)
     print("line extraction pt2 finished")
+    output_colmap_format(state)
 
 if __name__ == "__main__":
     scene_list = ["69e5939669", "689fec23D7", "c173f62b15", "55b2bf8036"]
