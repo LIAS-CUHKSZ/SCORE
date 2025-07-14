@@ -22,3 +22,4 @@ dataset/*
 /**/backup/
 scannetpp/outputs/*
 **/log.txt
+**/records/*

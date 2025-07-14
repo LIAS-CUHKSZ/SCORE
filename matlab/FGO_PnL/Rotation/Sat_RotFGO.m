@@ -15,10 +15,15 @@
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres)
+function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres, west_or_east)
 
 mex_flag = 1; %set true to use mex code for acceleration.
 verbose_flag = 0; %set true for detailed bnb process info.
+if mex_flag
+   Bound_fh = @Sat_Bounds_FGO_mex;
+else
+   Bound_fh = @Sat_Bounds_FGO;
+end
 % ---------------------------------------------------------------------
 % --- 1. preprocess ---
 line_pair_data = data_process(vector_n,vector_v); % pre-process data
@@ -26,47 +31,35 @@ line_pair_data = data_process(vector_n,vector_v); % pre-process data
 % ---------------------------------------------------------------------
 % --- 2. Initialize the Acclerated BnB process ---
 tic
-%  calculate bounds for two semispheres.
+%  initialization
+best_lower = -1; best_upper = -1;
 branch=[];
-B_east=[0;0;pi;pi]; B_west=[0;pi;pi;2*pi];
-if mex_flag
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO_mex(line_pair_data,B_east,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO_mex(line_pair_data,B_west,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
+upper_record=[]; lower_record=[]; % record bounds history
+if west_or_east == 2
+   east_branch = [0;0;pi;pi];
+   [upper,lower,theta]=Bound_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
+   u_best=polar_2_xyz(0.5*(east_branch(1)+east_branch(3)) , 0.5*(east_branch(2)+east_branch(4)) );
+   theta_best = cluster_stabber(theta,prox_thres);  
+   u_best=repmat(u_best,1,length(theta_best));
+   best_lower = lower; best_upper = upper;
+   branch = [east_branch;upper;lower];
+   next_branch = [0;pi;pi;2*pi];
 else
-    [upper_east,lower_east,theta_east]=Sat_Bounds_FGO(line_pair_data,B_east,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);    
-    [upper_west,lower_west,theta_west]=Sat_Bounds_FGO(line_pair_data,B_west,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
+    if west_or_east
+        next_branch = [0;pi;pi;2*pi];
+    else
+       next_branch = [0;0;pi;pi];
+    end
 end
-branch=[branch,[B_east;upper_east;lower_east]];
-branch=[branch,[B_west;upper_west;lower_west]];
-best_lower = max(lower_east,lower_west);
-if lower_east>=lower_west
-   theta_best = cluster_stabber(theta_east,prox_thres);
-   u_best=polar_2_xyz(0.5*(B_east(1)+B_east(3)),0.5*(B_east(2)+B_east(4)));
-else
-   theta_best = cluster_stabber(theta_west,prox_thres);
-   u_best=polar_2_xyz(0.5*(B_west(1)+B_west(3)),0.5*(B_west(2)+B_west(4)));
-end
-u_best=repmat(u_best,1,length(theta_best)); % it is possible that multiple optimal stabbers returned by Sat-IS 
-% select the next exploring branch according to the upper bounds
-best_upper = max(upper_east,upper_west);
-idx_upper = 2-(upper_east>upper_west);
-next_branch=branch(1:4,idx_upper);
-branch(:,idx_upper)=[];
-upper_record=best_upper; lower_record=best_lower; % record bounds history
 new_upper=zeros(1,4); new_lower=zeros(1,4); 
 new_theta_lower=cell(1,4); % it is possible that multiple optimal stabbers returned by Sat-IS
 iter=1;
-
 % ---------------------------------------------------------------------
 % --- 3. Start the Acclerated BnB process ---
 while true
     new_branch=subBranch(next_branch);
     for i=1:4
-        if mex_flag
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO_mex(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
-        else
-            [new_upper(i),new_lower(i),new_theta_lower{i}]=Sat_Bounds_FGO(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
-        end
+        [new_upper(i),new_lower(i),new_theta_lower{i}]=Bound_fh(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
         if(verbose_flag)
             fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
         end
