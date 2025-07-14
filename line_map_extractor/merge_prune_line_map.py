@@ -369,8 +369,8 @@ def run(scene_id, reuse_graph_flag):
     output_colmap_format(state)
 
 if __name__ == "__main__":
-    scene_list = ["69e5939669", "689fec23D7", "c173f62b15", "55b2bf8036"]
-    scene_id = scene_list[0]
+    scene_list = ["69e5939669", "689fec23d7", "c173f62b15", "a1d9da703c"]
+    scene_id = scene_list[3]
     parser = argparse.ArgumentParser()
     parser.add_argument('--reuse', '-r', default='n', choices=['y', 'n'], help='use constructed graph, y or n')
     args = parser.parse_args()

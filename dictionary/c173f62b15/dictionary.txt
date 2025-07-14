@@ -31,7 +31,6 @@
 46,speaker
 47,projector
 49,ceiling light
-51,mat
 52,sofa chair
 
 ##########deleted semantic labels##########
@@ -53,3 +52,4 @@
 44,bowl
 48,bottle
 50,ceiling lamp
+51,mat

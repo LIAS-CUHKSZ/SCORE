@@ -1,0 +1,63 @@
+##########adopted semantic labels##########
+1,box
+2,laptop stand
+5,mouse
+6,keyboard
+10,file cabinet
+11,computer tower
+13,monitor
+14,table
+20,ceiling lamp
+21,heater
+22,pipe
+23,ceiling
+24,wall
+25,sofa cushion
+28,door
+31,whiteboard
+33,office chair
+34,floor
+37,sofa
+40,trash bin
+41,blinds
+43,window sill
+44,window
+45,laptop
+47,wall clock
+48,coat hanger
+53,telephone
+54,power socket
+57,thermostat
+59,storage cabinet
+
+##########deleted semantic labels##########
+3,object
+4,stack of paper
+7,umbrella
+8,hat
+9,blanket
+12,stapler
+15,book
+16,SPLIT
+17,REMOVE
+18,pen
+19,mug
+26,fake ceiling
+27,door frame
+29,structure
+30,whiteboard eraser
+32,plush toy
+35,cabinet
+36,chair
+38,candle
+39,sticky notes
+42,electrical duct
+46,laptop sleeve
+49,jacket
+50,envelope
+51,outlet
+52,network socket
+55,bag
+56,bowl
+58,blind rails
+60,window frame
