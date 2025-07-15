@@ -28,5 +28,3 @@ power socket
 light switch
 floor
 calendar
-paper note
-book

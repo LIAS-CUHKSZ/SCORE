@@ -1,0 +1,30 @@
+box
+laptop stand
+mouse
+keyboard
+file cabinet
+computer tower
+monitor
+table
+ceiling lamp
+heater
+pipe
+ceiling
+wall
+sofa cushion
+door
+whiteboard
+office chair
+floor
+sofa
+trash bin
+blinds
+window sill
+window
+laptop
+wall clock
+coat hanger
+telephone
+power socket
+thermostat
+storage cabinet

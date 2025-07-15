@@ -23,4 +23,3 @@ heater
 windowsill
 cabinet
 door
-books
