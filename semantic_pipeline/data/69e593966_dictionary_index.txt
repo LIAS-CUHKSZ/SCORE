@@ -23,4 +23,3 @@
 48 windowsill
 49 cabinet
 51 door
-50 books

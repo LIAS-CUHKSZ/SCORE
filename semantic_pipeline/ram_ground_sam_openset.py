@@ -34,11 +34,8 @@ import json
 
 import argparse
 import os
-from gdino import GroundingDINOAPIWrapper, visualize
 from PIL import Image
 import numpy as np
-
-dino_token = os.environ["DINO_API_TOKEN"]
 
 
 def load_image(image_path):
@@ -175,8 +172,9 @@ if __name__ == "__main__":
         os.makedirs(args.output_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    hydra.core.global_hydra.GlobalHydra.instance().clear()
-    hydra.initialize_config_module("pretrain_models", version_base="1.2")
+    # hydra.core.global_hydra.GlobalHydra.instance().clear()
+    # with hydra.initialize(version_base="1.2", config_path="."):
+    #     cfg = hydra.compose(config_name="pretrain_models/sam2.1_hq_hiera_l")
 
     ram_normalize = transform.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -218,13 +216,10 @@ if __name__ == "__main__":
             device,
         )
     else:
-        grounding_model = GroundingDINOAPIWrapper(dino_token)
+        pass
 
-    sam_predictor = SAM2ImagePredictor(
-        build_sam2("sam2.1_hq_hiera_l.yaml", args.sam_ck, apply_postprocessing=True).to(
-            device
-        )
-    )
+    sam_predictor = SAM2ImagePredictor(build_sam2("configs/sam2.1/sam2.1_hq_hiera_l.yaml", args.sam_ck))
+
 
     images = glob.glob(os.path.join(args.image_dir, "*"))
     images = sorted(images)

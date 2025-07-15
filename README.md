@@ -101,13 +101,22 @@ conda create -n ram-sam python=3.10
 conda install pytorch==2.5.1 torchvision==0.20.1 pytorch-cuda=12.1 -c pytorch -c nvidia
 
 # install sam2
-git clone https://github.com/facebookresearch/sam2.git && cd sam2
+git clone https://github.com/SysCV/sam-hq.git
+cd sam-hq/sam-hq2
 pip install -e .
 
 # install ground-dino
 git clone https://github.com/IDEA-Research/GroundingDINO.git
 cd GroundingDINO/
+export TORCH_CUDA_ARCH_LIST="9.0" # adjust this according to your GPU
 pip install -e .
+
+# if you encounter the error 'NameError: name '_C' is not defined'
+# you can check library using following command
+ldd groundingdino/_C.cpython-311-x86_64-linux-gnu.so
+
+# another reason for the error is your gcc version is too high, it will result 'libstdc++.so.6: version `GLIBCXX_3.4.32' not found '
+# you can use following command to update your gcc lib
 
 # install ram++
 git clone https://github.com/xinyu1205/recognize-anything.git
@@ -120,7 +129,9 @@ pip install -e .
 mkdir pretrain_models
 wget https://huggingface.co/xinyu1205/recognize-anything-plus-model/blob/main/ram_plus_swin_large_14m.pth
 wget https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha2/groundingdino_swinb_cogcoor.pth
-wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
+
+# download the SAM2.1 HQ model
+https://huggingface.co/lkeab/hq-sam/resolve/main/sam2.1_hq_hiera_large.pt?download=true
 ```
 
 #### Generate the Tag Description for RAM++
