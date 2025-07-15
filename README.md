@@ -50,8 +50,8 @@ python -m semantic.prep.rasterize
 python -m semantic.prep.semantics_2d
 
 
-# split dataset for train and test
-python -m common.split_views merged_config.yaml
+# # split dataset for train and test based on scannet++ tools
+# python -m common.split_views merged_config.yaml
 ```
 NOTE: extract semantic labels will take a long time.
 
