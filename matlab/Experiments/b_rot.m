@@ -77,22 +77,25 @@ parfor num = 0:2000
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
+    L = sum(log(match_count(match_count>0)));  % a sufficiently large number
     kernel_buff_SCM_power   = zeros(num_2D_lines,max(match_count));
     kernel_buff_SCM_exp     = zeros(num_2D_lines,max(match_count));
     kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
+        if match_count(i)==0
+            continue
+        end
         kernel_buff_SCM_power(i,1)=1;
         kernel_buff_SCM_exp(i,1)=1;
-        kernel_buff_SCM_entropy(i,1)=1;
+        kernel_buff_SCM_entropy(i,1)=1-log(match_count(i))/L;
         for j = 2:match_count(i)
             kernel_buff_SCM_power(i,j) = j^(-8);
             kernel_buff_SCM_exp(i,j)=2^(-j);
-            kernel_buff_SCM_entropy(i,j)=log(j)-log(j-1);
+            kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
         end
     end
     kernel_buff_SCM_power(:,2:end)=kernel_buff_SCM_power(:,2:end)/sum(sum(kernel_buff_SCM_power(:,2:end)));
     kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
-    kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
     kernel_buff_CM=ones(num_2D_lines,max(match_count));
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
@@ -138,6 +141,8 @@ Record_SCM_FGO_power(Record_SCM_FGO_power.("Best Score")==0,:)=[];
 Record_SCM_FGO_exp(Record_SCM_FGO_exp.("Best Score")==0,:)=[];
 Record_SCM_FGO_entropy(Record_SCM_FGO_entropy.("Best Score")==0,:)=[];
 %%
+output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+save(output_filename);
 fprintf("============ statistics ============\n")
 num_valid_images = height(Record_SCM_FGO_entropy);
 fprintf("num of valid images: %d\n",num_valid_images);
@@ -146,8 +151,6 @@ fprintf("CM_FGO: %d \n",length(find(Record_CM_FGO.("Max Rot Err")<10)))
 fprintf("SCM_FGO_power: %d \n",length(find(Record_SCM_FGO_power.("Max Rot Err")<10)))
 fprintf("SCM_FGO_exp: %d \n",length(find(Record_SCM_FGO_exp.("Max Rot Err")<10)))
 fprintf("SCM_FGO_entropy: %d \n",length(find(Record_SCM_FGO_entropy.("Max Rot Err")<10)))
-output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
-save(output_filename);
 %%
 fprintf("============ time statistics ============\n")
 fprintf("CM_FGO: %f,%f,%f\n",quantile(Record_CM_FGO.("Time"),[0.25,0.5,0.75]))

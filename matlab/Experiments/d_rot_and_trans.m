@@ -13,7 +13,7 @@ room_sizes =  [8,    6, 4;
               10.5, 5, 3.5; 
               10.5, 6, 3.0];
 dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
-scene_idx = 1;
+scene_idx = 4;
 dataset_name = dataset_ids(scene_idx);
 space_size =  room_sizes(scene_idx,:);
 data_folder="csv_dataset/"+dataset_name+"/";
@@ -58,7 +58,6 @@ parfor num =1:total_img
            west_east_flag = 0;
         end
     end
-    
     intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
     % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1) 
     lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv"); 
@@ -80,21 +79,24 @@ parfor num =1:total_img
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
-    kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
+    L = sum(log(match_count(match_count>0)));
+    rot_kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
-        kernel_buff_SCM_entropy(i,1)=1;
+        if match_count(i)==0
+            continue
+        end
+        rot_kernel_buff_SCM_entropy(i,1)=1-log(match_count(i))/L;
         for j = 2:match_count(i)
-            kernel_buff_SCM_entropy(i,j)=log(j)-log(j-1);
+            rot_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
         end
     end
-    kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
     %
     outlier_ratio = 1-M/size(n_2D,1);
     %-------------------------------------------------------------
     %---- 4. complete pipeline starts here -----
     time_all = 0; 
     [R_opt_top,best_score,num_candidate_rot,time,~,~] = ...
-        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_entropy,...
+        Sat_RotFGO(n_2D,v_3D,ids,rot_kernel_buff_SCM_entropy,...
         branch_reso_r,epsilon_r,sample_reso_r,prox_thres_r,west_east_flag);
     time_all = time_all+time;
     best_t_score = -1;
@@ -105,27 +107,26 @@ parfor num =1:total_img
         [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot] = ...
             under_specific_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r);
         %%% saturation function design
-        match_count = zeros(num_2D_lines,1);
+        match_count_pruned = zeros(num_2D_lines,1);
         for i = 1:num_2D_lines
-            match_count(i) = sum(id_inliers_under_rot==i);
+            match_count_pruned(i) = sum(id_inliers_under_rot==i);
         end
-        kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
+        LL = sum(log(match_count_pruned(match_count_pruned>0)));
+        trans_kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count_pruned));
         for i = 1:num_2D_lines
-            kernel_buff_SCM_entropy(i,1)=1;
-            for j = 2:match_count(i)
-                kernel_buff_SCM_entropy(i,j)=log(j)-log(j-1);
+            if match_count_pruned(i)==0
+                continue
+            end
+            trans_kernel_buff_SCM_entropy(i,1)=1-log(match_count_pruned(i))/LL;
+            for j = 2:match_count_pruned(i)
+                trans_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/LL;
             end
         end
-        kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
-        %%% socre under t_gt
-        residuals = sum(pert_rot_n_2D_inlier.*(endpoints_3D_inlier(1:2:end,:)-t_gt'),2);
-        inliers_t_gt = find(abs(residuals )<=epsilon_t);
-        score_t_gt_SCM_entropy = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_entropy);
         %%% Sat-CM: entropy + geo 
-        [t_best_candidates,~,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_entropy,space_size,branch_reso_t,epsilon_t,prox_thres_t);
+        [t_best_candidates,~,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,trans_kernel_buff_SCM_entropy,space_size,branch_reso_t,epsilon_t,prox_thres_t);
         time_all = time_all+time;
         % prune candidates according to geometric constraints
-        [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_entropy);
+        [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,trans_kernel_buff_SCM_entropy);
         t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
         if best_score > best_t_score
             best_t_score = best_score;
@@ -140,6 +141,8 @@ parfor num =1:total_img
 end
 Record_est_SCM_entropy(Record_est_SCM_entropy.("Outlier Ratio")==0,:)=[];
 %% 
+output_filename= "./matlab/Experiments/records/"+dataset_name+"_full_record.mat";
+save(output_filename);
 num_valid = height(Record_est_SCM_entropy);
 fprintf("============ time statistics ============\n")
 fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(Record_est_SCM_entropy.time,[0.25,0.5,0.75]))
@@ -149,15 +152,13 @@ fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(Record_est_SCM_entropy.("Rot Err"
 fprintf("============ trans err quantile ============\n")
 fprintf("IR: %f,%f,%f\n",quantile(Record_est_SCM_entropy.("IR Err Trans"),[0.25,0.5,0.75]))
 fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(Record_est_SCM_entropy.("Trans Err"),[0.25,0.5,0.75]))
-output_filename= "./matlab/Experiments/records/"+dataset_name+"_full_record.mat";
 fprintf("============ Recall at 3/5/10 deg ============\n")
 fprintf("IR: %f,%f,%f\n",sum(Record_est_SCM_entropy.("IR Err Rot")<[3,5,10])/num_valid*100)
 fprintf("SCM_FGO_entropy: %f,%f,%f\n",sum(Record_est_SCM_entropy.("Rot Err")<[3,5,10])/num_valid*100)
 fprintf("============ Recall at 5cm/10cm/20cm ============\n")
 fprintf("IR: %f,%f,%f\n",sum(Record_est_SCM_entropy.("IR Err Trans")<[0.05,0.1,0.2])/num_valid*100)
 fprintf("SCM_FGO_entropy: %f,%f,%f\n",sum(Record_est_SCM_entropy.("Trans Err")<[0.05,0.1,0.2])/num_valid*100)
-save(output_filename);
-%%
+% %
 % ---------------------------------------------------------------------
 % --- sub-functions ---
 function flag = checkTransAmbiguity(img_idx,lines2D,R_gt)

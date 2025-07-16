@@ -14,7 +14,7 @@ room_sizes =  [8,    6, 4;
               10.5, 5, 3.5; 
               10.5, 6, 3.0];
 dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
-scene_idx = 1;
+scene_idx = 4;
 dataset_name = dataset_ids(scene_idx);
 space_size =  room_sizes(scene_idx,:);
 data_folder="csv_dataset/"+dataset_name+"/";
@@ -74,21 +74,24 @@ parfor num =1:length(valid_idx)
     for i = 1:num_2D_lines
         match_count(i) = sum(id_inliers_under_rot==i);
     end
+    L = sum(log(match_count(match_count>0)));
     kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     kernel_buff_SCM_power = zeros(num_2D_lines,max(match_count));
     kernel_buff_SCM_exp =  zeros(num_2D_lines,max(match_count));
     kernel_buff_CM  = ones(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
+        if match_count(i)==0
+            continue
+        end
         kernel_buff_SCM_power(i,1)=1;
         kernel_buff_SCM_exp(i,1)=1;
-        kernel_buff_SCM_entropy(i,1)=1;
+        kernel_buff_SCM_entropy(i,1)=1-log(match_count(i))/L;
         for j = 2:match_count(i)
-            kernel_buff_SCM_entropy(i,j)=log(j)-log(j-1);
+            kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
             kernel_buff_SCM_power(i,j) = j^(-8);
             kernel_buff_SCM_exp(i,j) = 2^(-j);
         end
     end
-    kernel_buff_SCM_entropy(:,2:end)=kernel_buff_SCM_entropy(:,2:end)/sum(sum(kernel_buff_SCM_entropy(:,2:end)));
     kernel_buff_SCM_power(:,2:end)=kernel_buff_SCM_power(:,2:end)/sum(sum(kernel_buff_SCM_power(:,2:end)));
     kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
     %%% socre under t_gt
@@ -135,6 +138,8 @@ Record_gt_SCM_power(Record_gt_SCM_power.("BnB Score")==0,:)=[];
 Record_gt_SCM_exp(Record_gt_SCM_exp.("BnB Score")==0,:)=[];
 Record_gt_SCM_entropy(Record_gt_SCM_entropy.("BnB Score")==0,:)=[];
 %%
+output_filename= "./matlab/Experiments/records/"+dataset_name+"_translation_record.mat";
+save(output_filename);
 num_valid_images = height(Record_gt_CM);
 fprintf("============ statistics ============\n")
 fprintf("num of valid images: %d\n",num_valid_images);
@@ -143,8 +148,6 @@ fprintf("CM_gt_FGO: %d \n",length(find(Record_gt_CM.("Trans Err")<0.1)))
 fprintf("SCM_gt_FGO_power: %d \n",length(find(Record_gt_SCM_power.("Trans Err")<0.1)))
 fprintf("SCM_gt_FGO_exp: %d \n",length(find(Record_gt_SCM_exp.("Trans Err")<0.1)))
 fprintf("SCM_gt_FGO_entropy: %d \n",length(find(Record_gt_SCM_entropy.("Trans Err")<0.1)))
-output_filename= "./matlab/Experiments/records/"+dataset_name+"_translation_record.mat";
-save(output_filename);
 %%
 fprintf("============ time statistics (trans only) ============\n")
 fprintf("CM_gt_FGO: %f,%f,%f\n",quantile(Record_gt_CM.("time"),[0.25,0.5,0.75]))
