@@ -4,12 +4,11 @@ output_csv_files.py
 This script outputs csv data for running relocalization with Matlab or C++ code.
 
 Output:
-- A seperate file for each image: pose, intrinsic, 2D line parameters, 2D line endpoints
-- 3D line parameters 
-- 3D line endpoints
+- A seperate file for each image: intrinsic, 2D line parameters, gt poses, retrived map line idx, retrived pose
+- A csv file for map line info 
 
 Author: Haodong JIANG <221049033@link.cuhk.edu.cn>
-Version: 1.0
+Version: 2.0
 License: MIT
 """
 
@@ -21,12 +20,16 @@ import os
 # home = os.path.expanduser("~")
 root_dir = "/data1/home/lucky/IROS25"
 # scene_list = ["69e5939669","689fec23d7","c173f62b15","55b2bf8036"]
-scene_list = ["69e5939669"]
+scene_list = ["689fec23d7"]
+pred_flag = True   # True: use predicted semantic labels for the query imagese, False: use ground truth semantic labels
 for i in range(0,len(scene_list)):
     scene_id = scene_list[i]
     data_path_map = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/map/"+scene_id+f"_results_merged.npy"
     data_map = np.load(data_path_map, allow_pickle=True).item()
-    data_path_query = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/query/"+scene_id+f"_query_data.npy"
+    if pred_flag:
+        data_path_query = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/query/"+scene_id+f"_query_data_pred.npy"
+    else:
+        data_path_query = root_dir+f"/SCORE/line_map_extractor/out/"+scene_id+"/query/"+scene_id+f"_query_data.npy"
     data_query = np.load(data_path_query, allow_pickle=True).item()
     #
     merged_semantic_ids_3D = data_map['merged_semantic_ids_3D']
@@ -44,13 +47,17 @@ for i in range(0,len(scene_list)):
     scene_proj_error_t = data_query['scene_proj_error_t']
     #
     ### save path
-    base_path = root_dir+f"/SCORE/csv_dataset/"+scene_id+"/"
+    if pred_flag:
+        base_path = root_dir+f"/SCORE/csv_dataset/"+scene_id+"_pred/"
+    else:
+        base_path = root_dir+f"/SCORE/csv_dataset/"+scene_id+"/"
     pose_folder = base_path+"poses/"
+    retrived_pose_folder = base_path+"retrived_closest_pose/"
     intrinsic_folder = base_path+"intrinsics/"
     line2D_folder = base_path+"lines2D/"
     retrived_3D_line_idx_folder = base_path+"retrived_3D_line_idx/"
 
-    for folder in [pose_folder,intrinsic_folder,line2D_folder,retrived_3D_line_idx_folder]:
+    for folder in [pose_folder,intrinsic_folder,line2D_folder,retrived_3D_line_idx_folder,retrived_pose_folder]:
         if not os.path.exists(folder):
             os.makedirs(folder)
 
@@ -62,6 +69,10 @@ for i in range(0,len(scene_list)):
         df_retrived_3D_line_idx = pd.DataFrame(retrived_data, columns=['retrived_3D_line_idx'])
         df_retrived_3D_line_idx.to_csv(retrived_3D_line_idx_folder+frame_name+'.csv', index=False)
         num_lines = len(frame_semantics_id)
+        # store the retrived pose of the most similar image
+        retrived_pose = retrived_poses[frame_name][1]
+        df_retrived_pose = pd.DataFrame(retrived_pose, columns=['c1','c2','c3','c4'])
+        df_retrived_pose.to_csv(retrived_pose_folder+frame_name+'_retrived_pose.csv', index=False)
         # store the pose and camera intrinsic for the cur image
         pose_this_frame = poses_all[frame_name] 
         intrinsic_vec = np.empty([1,4],dtype=float)  # fx cx fy cy

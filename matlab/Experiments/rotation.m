@@ -1,18 +1,29 @@
 %%%%
 % Rotation Estimation
 % Saturated Consensus Maximization vs Consensus Maximization
-% FGO_PnL vs EGO_PnL
+% --- Note!! --- 
+% If you don't want to or can't use the compiled mex functions, 
+% remeber to set variables 'mex_flag=0' in function Sat_RotFGO
 
 %%% Author:  Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% Version: 2.0
 %%% License: MIT
 
+
+
 clear;
 clc;
-dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
-dataset_idx = dataset_ids(4);
-data_folder="csv_dataset/"+dataset_idx+"/";
-load(data_folder+"lines3D.mat");
+scene_idx = 2;
+pred_flag = 1; % set 1 if use predicted semantic label
+%
+dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_name = dataset_names(scene_idx);
+if pred_flag
+    data_folder="csv_dataset/"+dataset_name+"_pred/";
+else
+    data_folder="csv_dataset/"+dataset_name+"/";
+end
+lines3D=readmatrix(data_folder+"/3Dlines.csv"); 
 %%% statistics
 total_img=1000;
 column_names=...
@@ -58,20 +69,28 @@ parfor num = 0:2000
     intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
     % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1) 
     lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv"); 
+    lines2D(lines2D(:,4)==0,:)=[]; % delete lines without semantic label
     lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
     % ---------------------------------------------------------------------
-    % --- 2. skip image not observable ---
-    with_match_idx = find(lines2D(:,9)>=0);
-    M = length(with_match_idx);
-    if M < 5
-       fprintf("image "+num2str(img_idx)+" is ambigious in rotation, skip.\n");
+    % --- 2. semantic matching and outlier ratio ---
+    lines3D_sub = lines3D(retrived_3D_line_idx,:);
+    [ids,n_2D,v_3D,~]=match_line(lines2D,lines3D_sub);  
+    % skip image with too few matched 2D lines
+    if length(unique(ids)) < 5
+       fprintf("image "+num2str(img_idx)+" has less than 5 lines, skip.\n");
        continue
     end
-    % epsilon_r = max(lines2D(with_match_idx,10))+0.001;
-    % --- 3. semantic matching and saturation function design ---
-    fprintf(num2str(img_idx)+"\n")
-    lines3D_sub = lines3D(retrived_3D_line_idx,:);
-    [ids,n_2D,v_3D,~]=match_line(lines2D,lines3D_sub);  % match with clustered 3D lines
+    total_match_num = size(n_2D,1);
+    with_match_ids = find(lines2D(:,9)>0);
+    if pred_flag
+       predicted_semantics = lines2D(with_match_ids,4);
+       true_semantics = lines3D(lines2D(with_match_ids,9),7);
+       outlier_ratio = 1-nnz(predicted_semantics==true_semantics)/total_match_num;
+    else
+       outlier_ratio = 1-length(with_match_ids)/total_match_num;
+    end
+
+    % --- 3. saturation function design ---
     num_2D_lines = size(lines2D,1);
     match_count = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
@@ -97,27 +116,28 @@ parfor num = 0:2000
     kernel_buff_SCM_power(:,2:end)=kernel_buff_SCM_power(:,2:end)/sum(sum(kernel_buff_SCM_power(:,2:end)));
     kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
     kernel_buff_CM=ones(num_2D_lines,max(match_count));
+
+    % ---------------------------------------------------------------------
+    % --- rotation estimation starts here ---
+    fprintf(num2str(img_idx)+"\n")
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
-    % ---------------------------------------------------------------------
-    % --- 4. estimate rotation with Consensus Maximization  ---
-    gt_score = calculate_score(gt_inliers_id,kernel_buff_CM);
+    
     % CM_FGO
+    gt_score = calculate_score(gt_inliers_id,kernel_buff_CM);
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_CM,...
         branch_reso,epsilon_r,sample_reso,prox_thres,west_east_flag);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_CM_FGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+    Record_CM_FGO(num+1,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 
-    % ---------------------------------------------------------------------
-    % --- 5. estimate rotation with Saturated Consensus Maximization  ---
     % SCM_FGO_power
     gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_power);
     [R_opt_top,best_score,num_candidate,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_power,...
         branch_reso,epsilon_r,sample_reso,prox_thres,west_east_flag);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_SCM_FGO_power(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+    Record_SCM_FGO_power(num+1,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 
     % SCM_FGO_exp
     gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_exp);
@@ -125,7 +145,7 @@ parfor num = 0:2000
         Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_exp,...
         branch_reso,epsilon_r,sample_reso,prox_thres,west_east_flag);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_SCM_FGO_exp(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
+    Record_SCM_FGO_exp(num+1,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 
     % SCM_FGO_entropy
     gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_entropy);
@@ -133,15 +153,18 @@ parfor num = 0:2000
         Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_entropy,...
         branch_reso,epsilon_r,sample_reso,prox_thres,west_east_flag);
     [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt_top,R_gt);
-    Record_SCM_FGO_entropy(num+1,:)={img_idx,size(lines2D,1),epsilon_r,1-M/size(n_2D,1),retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
-   
+    Record_SCM_FGO_entropy(num+1,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{rotmat2vec3d(R_max)}};
 end
 Record_CM_FGO(Record_CM_FGO.("Best Score")==0,:)=[];
 Record_SCM_FGO_power(Record_SCM_FGO_power.("Best Score")==0,:)=[];
 Record_SCM_FGO_exp(Record_SCM_FGO_exp.("Best Score")==0,:)=[];
 Record_SCM_FGO_entropy(Record_SCM_FGO_entropy.("Best Score")==0,:)=[];
 %%
-output_filename= "./matlab/Experiments/records/"+dataset_idx+"_rotation_record.mat";
+if pred_flag
+   output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record.mat";
+else
+   output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record.mat";
+end
 save(output_filename);
 fprintf("============ statistics ============\n")
 num_valid_images = height(Record_SCM_FGO_entropy);

@@ -1,23 +1,31 @@
 %%%%
-% Translation Estimation
-% Saturated Consensus Maximization vs Consensus Maximization
-% GT rotation vs FGO_PnL rotation estimates
+% complete pipeline with Saturated Consensus Maximization
+% --- Note!! --- 
+% If you don't want to or can't use the compiled mex functions, 
+% remeber to set variables 'mex_flag=0' in functions Sat_RotFGO and Sat_TransFGO
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% Version: 2.0
 %%% License: MIT
+
 clear
 clc
+scene_idx = 2;
+pred_flag = 1;
+%
 room_sizes =  [8,    6, 4;
                7,   7, 3;  
               10.5, 5, 3.5; 
               10.5, 6, 3.0];
-dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
-scene_idx = 4;
-dataset_name = dataset_ids(scene_idx);
+dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_name = dataset_names(scene_idx);
 space_size =  room_sizes(scene_idx,:);
-data_folder="csv_dataset/"+dataset_name+"/";
-load(data_folder+"lines3D.mat");
+if pred_flag
+    data_folder="csv_dataset/"+dataset_name+"_pred/";
+else
+    data_folder="csv_dataset/"+dataset_name;
+end
+lines3D=readmatrix(data_folder+"/3Dlines.csv"); 
 %%% rot params
 prox_thres_r = 1*pi/180; % for clustering proximate stabbers
 branch_reso_r = pi/256; % terminate bnb when branch size < branch_reso
@@ -32,7 +40,7 @@ column_names=["Image Id","# 2D lines","Outlier Ratio","IR Err Rot","IR Err Trans
 columnTypes = ["int32"  ,"int32"     ,"double"       ,"double"    ,"double",       "double" ,"double"   ,"double"];
 total_img=2000;
 Record_est_SCM_entropy = table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-parfor num =1:total_img
+parfor num =0:total_img
     % ---------------------------------------------------------------------
     % --- 1. load data ---
     img_idx=num*10;     
@@ -61,25 +69,33 @@ parfor num =1:total_img
     intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
     % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1) 
     lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv"); 
+    lines2D(lines2D(:,4)==0,:)=[]; %delete lines without a semantic label
     lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
     % ---------------------------------------------------------------------
-    % --- 2. skip image not observable ---
-    with_match_idx = find(lines2D(:,9)>=0);
-    M = length(with_match_idx);
-    if M < 5
-       fprintf("image "+num2str(img_idx)+" is ambigious in rotation, skip.\n");
-       continue
-    end
-    % --- 3. semantic matching and saturation function design ---
-    fprintf(num2str(img_idx)+"\n")
+    % --- 2. semantic matching and outlier ratio ---
     lines3D_sub = lines3D(retrived_3D_line_idx,:);
     [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D_sub);  % match with clustered 3D lines
+    % skip image with too few 2D lines
+    if length(unique(ids)) < 5
+       fprintf("image "+num2str(img_idx)+" has less than 5 lines, skip.\n");
+       continue
+    end
+    total_match_num = size(n_2D,1);
+    with_match_ids = find(lines2D(:,9)>0);
+    if pred_flag
+       predicted_semantics = lines2D(with_match_ids,4);
+       true_semantics = lines3D(lines2D(with_match_ids,9),7);
+       outlier_ratio = 1-nnz(predicted_semantics==true_semantics)/total_match_num;
+    else
+       outlier_ratio = 1-length(with_match_ids)/total_match_num;
+    end
+    % --- 3. saturation function design ---
     num_2D_lines = size(lines2D,1);
     match_count = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
-    L = sum(log(match_count(match_count>0)));
+    L = sum(log(match_count(match_count>0)));  % a sufficiently large number
     rot_kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
         if match_count(i)==0
@@ -90,10 +106,12 @@ parfor num =1:total_img
             rot_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
         end
     end
-    %
-    outlier_ratio = 1-M/size(n_2D,1);
+    gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
+    gt_inliers_id = ids(gt_inliers_idx);
+
     %-------------------------------------------------------------
     %---- 4. complete pipeline starts here -----
+    fprintf(num2str(img_idx)+"\n")
     time_all = 0; 
     [R_opt_top,best_score,num_candidate_rot,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,rot_kernel_buff_SCM_entropy,...
@@ -106,6 +124,11 @@ parfor num =1:total_img
         R_opt = R_opt_top(n*3-2:n*3,:)';
         [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot] = ...
             under_specific_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r);
+        % observability check
+        ambiguiFlag = checkTransAmbiguity(img_idx,lines2D(unique(id_inliers_under_rot),:),R_gt);
+        if ambiguiFlag
+            continue
+        end
         %%% saturation function design
         match_count_pruned = zeros(num_2D_lines,1);
         for i = 1:num_2D_lines
@@ -137,11 +160,15 @@ parfor num =1:total_img
     rot_err = angular_distance(best_R,R_gt);
     t_err   = norm(best_t-t_gt);
     column_names=["Image Id","# 2D lines","Outlier Ratio","IR Err Rot","IR Err Trans", "Rot Err","Trans Err", "time"];
-    Record_est_SCM_entropy(num+1,:)={img_idx,M,outlier_ratio,IR_err_rot,IR_err_trans,rot_err,t_err,time_all};
+    Record_est_SCM_entropy(num+1,:)={img_idx,num_2D_lines,outlier_ratio,IR_err_rot,IR_err_trans,rot_err,t_err,time_all};
 end
 Record_est_SCM_entropy(Record_est_SCM_entropy.("Outlier Ratio")==0,:)=[];
 %% 
-output_filename= "./matlab/Experiments/records/"+dataset_name+"_full_record.mat";
+if pred_flag
+    output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_full_record.mat";
+else
+    output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_full_record.mat";
+end
 save(output_filename);
 num_valid = height(Record_est_SCM_entropy);
 fprintf("============ time statistics ============\n")

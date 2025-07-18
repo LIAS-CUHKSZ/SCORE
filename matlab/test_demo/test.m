@@ -1,17 +1,19 @@
 %%%%
-% test demo of one query image
-% for simplification, we remove image retriveal and code for selecting
-% between multiple rotation candidates (which can be found in Experiments/d_rot_and_trans.m)
-% Saturated Consensus Maximization vs Consensus Maximization
-% GT rotation vs FGO_PnL rotation estimates
+% test demo of one query image (Sat-CM v.s. CM)
+% for simplification, we remove code for:
+% 1. image retriveal 
+% 2. observability check
+% 3. distinguish between multiple rotation candidates
+% refer to Experiments/pipeline.m for complete pipeline code
+% --- Note!! --- 
+% If you don't want to or can't use the compiled mex functions, 
+% remeber to set variables 'mex_flag=0' in functions Sat_RotFGO and Sat_TransFGO
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% Version: 2.0
 %%% License: MIT
 
-% Note!! 
-% If you don't want to or can't use the compiled mex functions, 
-% remeber to set variables 'mex_flag=0' in functions Sat_RotFGO and Sat_TransFGO
+
 
 clear
 clc
@@ -22,23 +24,26 @@ prox_thres_r = 1*pi/180; % for clustering proximate stabbers
 branch_reso_r = pi/256; % terminate bnb when branch size < branch_reso
 sample_reso_r = pi/256; % resolution for interval analysis
 epsilon_r = 0.015;
+% this flag is used to initialize the BnB process
+% set it at 2 when no prior information is provided
+west_east_flag = 2;
+
 %%% trans params
 branch_reso_t = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres_t  = 0.01; %
 epsilon_t = 0.03;
+
 % ---------------------------------------------------------------------
 % --- 1. load data ---
-load(data_folder+"lines3D.mat");
+lines3D = readmatrix(data_folder+"/3Dlines.csv"); 
 K_p=readmatrix(data_folder+"camera_intrinsic.csv");
 T_gt = readmatrix(data_folder+"gt_pose.csv");
 R_gt = T_gt(1:3,1:3); t_gt=T_gt(1:3,4);
-% this flag is used to initialize the BnB process
-% set it at 2 when no prior information is provided
-west_east_flag = 2;
 intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
 % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1)
 lines2D = readmatrix(data_folder+"2Dlines.csv");
 lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
+
 % --- 2. semantic matching and saturation function design ---
 [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D);  % match with clustered 3D lines
 num_2D_lines = size(lines2D,1);
@@ -59,8 +64,9 @@ for i = 1:num_2D_lines
     end
 end
 %
-outlier_ratio = 1-sum(match_count>0)/size(n_2D,1);
+outlier_ratio = 1-nnz(lines2D(:,9)>0)/size(n_2D,1);
 fprintf("%d 2D lines with %d associations at a outlier ratio of %f\n",num_2D_lines,length(ids),outlier_ratio)
+
 %-------------------------------------------------------------
 %---- 3. complete pipeline starts here -----
 for o = 1:2
@@ -73,7 +79,7 @@ for o = 1:2
         rot_kernel_buff = rot_kernel_buff_SCM_entropy;
     end
     time_all = 0;
-    [R_opt_top,best_score,num_candidate_rot,time,~,~] = ...
+    [R_opt_top,~,num_candidate_rot,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,rot_kernel_buff,...
         branch_reso_r,epsilon_r,sample_reso_r,prox_thres_r,west_east_flag);
     time_all = time_all+time;
@@ -109,8 +115,8 @@ for o = 1:2
     % prune candidates according to geometric constraints
     [best_score,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,trans_kernel_buff);
     t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
-    rot_err = angular_distance(best_R,R_gt);
-    t_err   = norm(best_t-t_gt);
+    rot_err = angular_distance(R_opt,R_gt);
+    t_err   = norm(t_fine_tuned-t_gt);
     fprintf("rot err:%f, trans err:%f, time: %f\n",rot_err,t_err,time_all);
 end
 %%

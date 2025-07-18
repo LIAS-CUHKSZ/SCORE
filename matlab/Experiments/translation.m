@@ -1,24 +1,34 @@
 %%%%
 % Translation Estimation
 % Saturated Consensus Maximization vs Consensus Maximization
-% GT rotation vs FGO_PnL rotation estimates
+% --- Note!! --- 
+% If you don't want to or can't use the compiled mex functions, 
+% remeber to set variables 'mex_flag=0' in function Sat_TransFGO
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% Version: 2.0
 %%% License: MIT
 
+
+
 clear
 clc
+scene_idx = 2;
+pred_flag = 1; % set 1 if use predicted semantic label
+%
 room_sizes =  [8,    6, 4;
                7,   7, 3;  
               10.5, 5, 3.5; 
               10.5, 6, 3.0];
-dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
-scene_idx = 4;
-dataset_name = dataset_ids(scene_idx);
+dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_name = dataset_names(scene_idx);
 space_size =  room_sizes(scene_idx,:);
-data_folder="csv_dataset/"+dataset_name+"/";
-load(data_folder+"lines3D.mat");
+if pred_flag
+    data_folder="csv_dataset/"+dataset_name+"_pred/";
+else
+    data_folder="csv_dataset/"+dataset_name+"/";
+end
+lines3D=readmatrix(data_folder+"/3Dlines.csv"); 
 %%% params
 branch_reso = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres  = 0.01; %  
@@ -33,14 +43,15 @@ Record_gt_SCM_entropy = table('Size', [total_img, length(column_names)],'Variabl
 %%% rotation data
 epsilon_r = 0.015;
 epsilon_t = 0.03;
-Rotation_Record = load("matlab\Experiments\records\"+dataset_name+"_rotation_record.mat").("Record_SCM_FGO_entropy");
-valid_idx = Rotation_Record{:,1}; % These images have passed the rotation ambiguity test.
 %% 
-parfor num =1:length(valid_idx)
+parfor num = 0:2000
     % ---------------------------------------------------------------------
     % --- 1. load data ---
-    img_idx=valid_idx(num);     
+    img_idx=num*10;        
     frame_id = sprintf("%06d",img_idx);
+    if ~exist(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv",'file')     %%% read 2D line data of cur image
+        continue
+    end
     K_p=readmatrix(data_folder+"intrinsics\frame_"+frame_id+".csv");
     intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1];
     T_gt = readmatrix(data_folder+"poses\frame_"+frame_id+".csv"); R_gt = T_gt(1:3,1:3); t_gt=T_gt(1:3,4);
@@ -49,27 +60,35 @@ parfor num =1:length(valid_idx)
     retrived_err = norm(retrived_closest_pose(1:3,4)-t_gt);
     % lines2D(Nx9): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1) 
     lines2D = readmatrix(data_folder+"lines2D\frame_"+frame_id+"_2Dlines.csv"); 
-    lines2D = lines2D(lines2D(:,4)~=0,:);   % delete 2D line without a semantic label
+    lines2D(lines2D(:,4)==0,:)=[]; % delete lines without semantic label
     lines2D(:,1:3)=lines2D(:,1:3)*intrinsic;  lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
     num_2D_lines = size(lines2D,1);
-    M = nnz(lines2D(:,9)>0);
-    % ---------------------------------------------------------------------
-    % --- 2. check observability ---
-    ambiguiFlag = checkTransAmbiguity(img_idx,lines2D,R_gt);
+
+    % --- 2. semantic matching and observability check
+    lines3D_sub = lines3D(retrived_3D_line_idx,:);
+    [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D_sub);  
+    ambiguiFlag = checkTransAmbiguity(img_idx,lines2D(unique(ids),:),R_gt);
     if ambiguiFlag
         continue
     end
     fprintf("Image"+num2str(img_idx)+"\n")
-    % ---------------------------------------------------------------------
-    % --- 3. semantic matching and saturation function design ---
-    lines3D_sub = lines3D(retrived_3D_line_idx,:); % retrived sub-map
-    [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D_sub);  
-    % ---------------------------------------------------------------------
-    % --- 4. localization with ground truth rotation ---
-    R_opt = R_gt;
+
+    % --- 3. find rotation inlier and calculate outlier ratio ---
+    R_opt = R_gt; % we use ground truth rotation in this experiment
     [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot] = ...
         under_specific_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r);
-    %%% saturation function design
+    total_match_num = size(pert_rot_n_2D_inlier,1);
+    unique_id_set = unique(id_inliers_under_rot);
+    with_match_id_set = unique_id_set(lines2D(unique_id_set,9)>0);
+    if pred_flag
+        predicted_semantics = lines2D(with_match_id_set,4);
+        true_semantics   = lines3D(lines2D(with_match_id_set,9),7);
+        outlier_ratio = 1 - nnz(predicted_semantics==true_semantics)/total_match_num;
+    else
+        outlier_ratio = 1 - length(with_match_id_set)/total_match_num;
+    end
+
+    % --- 4. saturation function design  ---
     match_count = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
         match_count(i) = sum(id_inliers_under_rot==i);
@@ -94,51 +113,58 @@ parfor num =1:length(valid_idx)
     end
     kernel_buff_SCM_power(:,2:end)=kernel_buff_SCM_power(:,2:end)/sum(sum(kernel_buff_SCM_power(:,2:end)));
     kernel_buff_SCM_exp(:,2:end)=kernel_buff_SCM_exp(:,2:end)/sum(sum(kernel_buff_SCM_exp(:,2:end)));
-    %%% socre under t_gt
+
+    % --------------------------------------
+    % --- 5. translation estimation starts here ---
     residuals = sum(pert_rot_n_2D_inlier.*(endpoints_3D_inlier(1:2:end,:)-t_gt'),2);
     inliers_t_gt = find(abs(residuals )<=epsilon_t);
-    score_t_gt_CM = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_CM);
-    score_t_gt_SCM_entropy = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_entropy);
-    score_t_gt_SCM_power = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_power);
-    score_t_gt_SCM_exp = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_exp);
+
     %%% CM    
+    score_t_gt_CM = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_CM);
     [t_best_candidates,best_score,~,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_CM,space_size,branch_reso,epsilon_t,prox_thres);
     % prune candidates according to geometric constraints
     [~,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_CM);
     t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
     t_err = norm(t_fine_tuned-t_gt);
-    Record_gt_CM(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),retrived_err,0,t_err,best_score,score_t_gt_CM,time};
+    Record_gt_CM(num+1,:)={img_idx,M,epsilon_t,outlier_ratio,retrived_err,0,t_err,best_score,score_t_gt_CM,time};
 
-    %%% Sat-CM: power + geo 
+    %%% Sat-CM: power function 
+    score_t_gt_SCM_power = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_power);
     [t_best_candidates,best_score,~,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_power,space_size,branch_reso,epsilon_t,prox_thres);
     % prune candidates according to geometric constraints
     [~,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_power);
     t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
     t_err = norm(t_fine_tuned-t_gt);
-    Record_gt_SCM_power(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),retrived_err,0,t_err,best_score,score_t_gt_SCM_power,time};
+    Record_gt_SCM_power(num+1,:)={img_idx,M,epsilon_t,outlier_ratio,retrived_err,0,t_err,best_score,score_t_gt_SCM_power,time};
     
-    %%% Sat-CM: exp + geo 
+    %%% Sat-CM: exponential function
+    score_t_gt_SCM_exp = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_exp);
     [t_best_candidates,best_score,~,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_exp,space_size,branch_reso,epsilon_t,prox_thres);
     % prune candidates according to geometric constraints
     [~,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_exp);
     t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
     t_err = norm(t_fine_tuned-t_gt);
-    Record_gt_SCM_exp(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),retrived_err,0,t_err,best_score,score_t_gt_SCM_exp,time};
+    Record_gt_SCM_exp(num+1,:)={img_idx,M,epsilon_t,outlier_ratio,retrived_err,0,t_err,best_score,score_t_gt_SCM_exp,time};
     
-    %%% Sat-CM: entropy + geo 
+    %%% Sat-CM: entropy function
+    score_t_gt_SCM_entropy = calculate_score(id_inliers_under_rot(inliers_t_gt),kernel_buff_SCM_entropy);
     [t_best_candidates,best_score,~,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,kernel_buff_SCM_entropy,space_size,branch_reso,epsilon_t,prox_thres);
     % prune candidates according to geometric constraints
     [~,t_best_candidates] = prune_t_candidates(R_opt,intrinsic,pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,epsilon_t,t_best_candidates,kernel_buff_SCM_entropy);
     t_fine_tuned = tune_t(t_best_candidates,pert_rot_n_2D_inlier,endpoints_3D_inlier(1:2:end,:),epsilon_t);
     t_err = norm(t_fine_tuned-t_gt);
-    Record_gt_SCM_entropy(num+1,:)={img_idx,M,epsilon_t,1-M/size(pert_rot_n_2D_inlier,1),retrived_err,0,t_err,best_score,score_t_gt_SCM_entropy,time};
+    Record_gt_SCM_entropy(num+1,:)={img_idx,M,epsilon_t,outlier_ratio,retrived_err,0,t_err,best_score,score_t_gt_SCM_entropy,time};
 end
 Record_gt_CM(Record_gt_CM.("BnB Score")==0,:)=[];
 Record_gt_SCM_power(Record_gt_SCM_power.("BnB Score")==0,:)=[];
 Record_gt_SCM_exp(Record_gt_SCM_exp.("BnB Score")==0,:)=[];
 Record_gt_SCM_entropy(Record_gt_SCM_entropy.("BnB Score")==0,:)=[];
 %%
-output_filename= "./matlab/Experiments/records/"+dataset_name+"_translation_record.mat";
+if pred_flag
+    output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_translation_record.mat";
+else
+    output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_translation_record.mat";
+end
 save(output_filename);
 num_valid_images = height(Record_gt_CM);
 fprintf("============ statistics ============\n")
