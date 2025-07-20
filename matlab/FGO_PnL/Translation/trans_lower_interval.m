@@ -11,7 +11,7 @@
 % x_limit   :  scalar
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 function interval = trans_lower_interval(n_2D_rot,p_3D,epsilon_t,yz_sampled,x_limit)

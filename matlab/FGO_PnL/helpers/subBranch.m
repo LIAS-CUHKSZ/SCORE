@@ -1,5 +1,6 @@
-function out=subBranch(branch)
 % divide the input 2D cube into four subcubes
+
+function out=subBranch(branch)
 a=branch(1:2);
 b=branch(3:end);
 c=0.5*(a+b);
@@ -11,5 +12,4 @@ for i=1:4
     out(3,i)= M(1,bitget(i,1)+2);
     out(4,i)= M(2,bitget(i,2)+2);
 end
-
 end

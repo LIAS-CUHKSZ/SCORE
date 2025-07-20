@@ -14,7 +14,7 @@
 % room_size     : 3 x 1, boundary of the room
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 

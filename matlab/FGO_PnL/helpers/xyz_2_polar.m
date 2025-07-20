@@ -1,3 +1,4 @@
+% transform a unit-length verctor to polar coordinates
 function [alpha,phi] = xyz_2_polar(axis)
     length = norm(axis);
     if length ==0

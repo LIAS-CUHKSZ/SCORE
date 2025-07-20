@@ -4,7 +4,7 @@
 % w,  h : int image width and height
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 function isIntersect = checkLineRect(p1, p2, w, h)

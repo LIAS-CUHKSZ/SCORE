@@ -9,7 +9,7 @@
 % sample_resolution:    scalar, control resolution for interval analysis.
 
 %%% Author:  Haodong JIANG <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 

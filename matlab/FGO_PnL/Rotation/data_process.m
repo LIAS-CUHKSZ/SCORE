@@ -1,18 +1,16 @@
 %%%%
-% Pre-compute useful quantities for each pair of matched 2D/3D lines.
-
+% Pre-compute useful quantities for each 2D/3D association
 %%% Inputs:
 % vector_v: N x 3, the direction vector for each matched 3D map line.
 % vector_n: N x 3, the normal vector paramater for each 2D image line.
 
 %%% Author: Xiang Zheng   <224045013@link.cuhk.edu.cn>
-%%% Version: 1.0
 %%% License: MIT
 %%%%
 
 function [line_pair_data] = data_process(vector_n,vector_v)
 N= size(vector_n,1);
-outer_product=zeros(N,3);
+outer_product=zeros(N,3);  
 outer_east = zeros(N,2);
 outer_west = zeros(N,2);
 inner_product=zeros(N,1);

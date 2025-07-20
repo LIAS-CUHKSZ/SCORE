@@ -8,7 +8,7 @@
 % prox_thres : scalar
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 function [upper_bound,lower_bound,t_sample] = Sat_Bounds_trans(pert_rot_n,p_3D,ids,epsilon_t,br_,space_size,kernel_buffer,prox_thres)

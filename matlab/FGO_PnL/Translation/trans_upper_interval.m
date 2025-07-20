@@ -12,7 +12,7 @@
 % vertices  :  2 x 4
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 
 function [interval] = trans_upper_interval(n_2D_rot,p_3D,epsilon_t,x_limit,vertices)

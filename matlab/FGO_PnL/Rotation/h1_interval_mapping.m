@@ -8,7 +8,7 @@
 % sample_resolution:    scalar, control resolution for interval analysis.
 
 %%% Author:  Xiang Zheng   <224045013@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 

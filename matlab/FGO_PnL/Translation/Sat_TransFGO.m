@@ -14,7 +14,7 @@
 
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 
@@ -87,7 +87,7 @@ while true
             t_best = clustered_t_sample;
             continue;
         end
-        if new_lower(i)==best_lower
+        if new_lower(i)==best_lower && new_lower(i)>=0
             x_stabber = new_t_sample{i}(1,:); yz_sample = new_t_sample{i}(2:3,1);
             x_cluster = cluster_stabber(x_stabber,prox_thres);
             x_num = length(x_cluster); clustered_t_sample = zeros(3,x_num);

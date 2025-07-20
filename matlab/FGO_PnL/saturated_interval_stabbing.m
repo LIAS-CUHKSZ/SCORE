@@ -8,41 +8,58 @@
 % prox_thres:   scalar, used for clustering proximate stabbers
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 2.0
+
 %%% License: MIT
 %%%%
 
 function [best_score,stabber] = saturated_interval_stabbing(Intervals,ids,kernel_buff,prox_thres)
-    L = size(Intervals, 1) / 2; 
-    masks = repmat([0;1], L, 1);
-    [~, sidx] = sort(Intervals);
-    length_sidx = 2*L;
-    score = 0; best_score = 0; 
-    stabber = zeros(1,10000); valid_stabber = 0;
-    count_buffer=zeros(max(ids),1);
-    for i = 1:length_sidx-1
-        if ~masks(sidx(i)) % start of an interval
-            temp = ids((sidx(i)+1)/2);
-            count_buffer(temp)=count_buffer(temp)+1;
-            score = score + kernel_buff(temp,count_buffer(temp));
-            if score >= best_score
-               new_stabber = [Intervals(sidx(i)):prox_thres:Intervals(sidx(i+1)),Intervals(sidx(i+1))];
-               num_new = length(new_stabber);
-               if score > best_score
-                   stabber(1:num_new) = new_stabber;
-                   valid_stabber = num_new;
-               else
-                   stabber(valid_stabber+1:valid_stabber+num_new) = new_stabber;
-                   valid_stabber = valid_stabber + num_new;
-               end            
-               best_score = score;
+L = size(ids,1);
+% mask = 0: the left endpoint of an interval (encoutered when entering)
+% mask = 1: the right endpoint of an interval (encoutered when exiting)
+masks = repmat([0;1], L, 1);
+% sort all endpoints
+[~, sidx] = sort(Intervals);
+
+% initialize the buffer to store optimal stabbers
+stabber = zeros(1,10000); count_valid_stabber = 0;
+
+% initialize buffer counting stabbed intervals for each 2D lines
+count_buffer=zeros(max(ids),1);
+
+% -------------------------------------
+% --- START ---
+length_sidx = 2*L;
+score = 0; best_score = 0;
+for i = 1:length_sidx-1
+
+    % entering an interval
+    if ~masks(sidx(i))
+        temp = ids((sidx(i)+1)/2); % get 2D line id
+        count_buffer(temp)=count_buffer(temp)+1; % # stabbed interval for this 2D line ++
+        score = score + kernel_buff(temp,count_buffer(temp)); % update score
+        % update the best stabber
+        if score >= best_score
+            new_stabber = [Intervals(sidx(i)):prox_thres:Intervals(sidx(i+1)),Intervals(sidx(i+1))];
+            num_new = length(new_stabber);
+            if score > best_score
+                % instead of clearing the buffer
+                % I record the number of optimal stabbers
+                stabber(1:num_new) = new_stabber;
+                count_valid_stabber = num_new;
+            else
+                stabber(count_valid_stabber+1:count_valid_stabber+num_new) = new_stabber;
+                count_valid_stabber = count_valid_stabber + num_new;
             end
-        else % end of an interval
-            temp = ids(sidx(i)/2);
-            score = score - kernel_buff(temp,count_buffer(temp));
-            count_buffer(temp)=count_buffer(temp)-1;
-        end       
+            best_score = score;
+        end
+
+        % exiting an interval
+    else
+        temp = ids(sidx(i)/2);
+        score = score - kernel_buff(temp,count_buffer(temp));
+        count_buffer(temp)=count_buffer(temp)-1;
     end
-    stabber(valid_stabber+1:end)=[];
+end
+stabber(count_valid_stabber+1:end)=[];
 end
 

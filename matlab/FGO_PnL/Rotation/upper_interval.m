@@ -12,7 +12,7 @@
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %           Xiang Zheng   <224045013@link.cuhk.edu.cn>
-%%% Version: 1.0
+ 
 %%% License: MIT
 %%%%
 
