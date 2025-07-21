@@ -205,14 +205,12 @@ int main()
     }
 
     // Create kernel buffer
-    Eigen::MatrixXd kernel_buffer =
-        RotFGO::createKernelBuffer(ids, use_saturated);
+    Eigen::MatrixXd kernel_buffer = RotFGO::createKernelBuffer(ids, use_saturated);
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    RotFGO solver;
+    RotFGO solver(branch_reso_r, epsilon_r, sample_reso_r, prox_thres_r);
     std::vector<Eigen::Matrix3d> R_candidates =
-        solver.solve(n_2D, v_3D, ids, kernel_buffer, branch_reso_r, epsilon_r,
-                     sample_reso_r, prox_thres_r, west_east_flag);
+        solver.solve(n_2D, v_3D, ids, kernel_buffer, west_east_flag);
     auto end_time = std::chrono::high_resolution_clock::now();
 
     double solve_time =
