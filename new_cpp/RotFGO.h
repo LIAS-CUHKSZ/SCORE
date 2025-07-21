@@ -83,28 +83,45 @@ struct Branch
 
 class RotFGO
 {
-  using BranchQueue = std::priority_queue<Branch, std::vector<Branch>, Branch::Comparator>;
 
 public:
-  RotFGO(double branch_resolution = M_PI / 256.0, double epsilon_r = 0.015,
-         double sample_resolution = M_PI / 256.0, double prox_threshold = M_PI / 180.0);
-  ~RotFGO();
+  using BranchQueue = std::priority_queue<Branch, std::vector<Branch>, Branch::Comparator>;
+
+  RotFGO(double branch_resolution, double epsilon_r,
+         double sample_resolution, double prox_threshold, bool use_saturated = true)
+      : branch_resolution_(branch_resolution), epsilon_r_(epsilon_r),
+        sample_resolution_(sample_resolution), prox_threshold_(prox_threshold),
+        use_saturated_(use_saturated) {}
+  ~RotFGO() {}
 
   // Main solving function
   std::vector<Eigen::Matrix3d>
   solve(const std::vector<Eigen::Vector3d> &vector_n,
         const std::vector<Eigen::Vector3d> &vector_v,
-        const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
+        const std::vector<int> &ids,
         int west_or_east = 2);
-
-  // Kernel buffer creation
-  static Eigen::MatrixXd createKernelBuffer(const std::vector<int> &ids,
-                                             bool use_saturated = true);
 
 private:
   // Data preprocessing
   LinePairData dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
                            const std::vector<Eigen::Vector3d> &vector_v);
+  // Helper functions for normal calculation, ref by dataProcess()
+  std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
+  calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
+
+  void processInitialBranch(Branch &branch, const LinePairData &line_pair_data,
+                            const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
+                            double &best_lower_bound, std::vector<Eigen::Vector3d> &best_axes,
+                            std::vector<double> &best_angles);
+
+  void updateBestSolution(const Branch &branch,
+                          const std::vector<double> &theta_candidates,
+                          double &best_lower_bound,
+                          std::vector<Eigen::Vector3d> &best_axes,
+                          std::vector<double> &best_angles);
+
+  void pruneBranchQueue(BranchQueue &branch_queue,
+                        double best_lower_bound);
 
   // Bound calculation
   std::tuple<double, double, std::vector<double>>
@@ -120,10 +137,6 @@ private:
   // Helper functions for coordinate conversion
   Eigen::Vector3d polarToXyz(double alpha, double phi);
   std::pair<double, double> xyzToPolar(const Eigen::Vector3d &axis);
-
-  // Helper functions for normal calculation
-  std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
-  calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
 
   // Interval calculation functions
   std::vector<double> lowerInterval(double A, double phi, double constant);
@@ -145,11 +158,15 @@ private:
   // Clustering
   std::vector<double> clusterStabber(const std::vector<double> &theta);
 
+  // Kernel buffer creation (now non-static)
+  Eigen::MatrixXd createKernelBuffer(const std::vector<int> &ids);
+
   // Algorithm parameters stored as member variables
   double branch_resolution_;
   double epsilon_r_;
   double sample_resolution_;
   double prox_threshold_;
+  bool use_saturated_;
 };
 
 #endif // ROTFGO_H

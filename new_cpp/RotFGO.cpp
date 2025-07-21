@@ -7,207 +7,99 @@
 
 const double PI = M_PI;
 
-RotFGO::RotFGO(double branch_resolution, double epsilon_r,
-               double sample_resolution, double prox_threshold)
-    : branch_resolution_(branch_resolution), epsilon_r_(epsilon_r),
-      sample_resolution_(sample_resolution), prox_threshold_(prox_threshold) {}
-
-RotFGO::~RotFGO() {}
-
 std::vector<Eigen::Matrix3d>
 RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
               const std::vector<Eigen::Vector3d> &vector_v,
-              const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
+              const std::vector<int> &ids,
               int west_or_east)
 {
+  // Step 1: Create kernel buffer
+  Eigen::MatrixXd kernel_buffer = createKernelBuffer(ids);
+
+  // Step 2: Pre-compute line pair data
   LinePairData line_pair_data = dataProcess(vector_n, vector_v);
 
-  // Step 2: init BnB process
-  double best_lower = -1.0;
-  double best_upper = -1.0;
+  // Step 3: Initialize branch-and-bound process
+  double best_lower_bound = -1.0;
   std::vector<Eigen::Vector3d> u_best;
   std::vector<double> theta_best;
-  std::vector<Branch> branches; // Store all branches for pruning
 
-  Branch next_branch;
-  int iteration = 0;
+  // Priority queue to manage branches based on upper bound
+  // (and size for tie-breaking)
+  BranchQueue branch_queue;
 
+  int iteration_count = 0;
+
+  // Step 4: Initialize with hemisphere(s) based on west_or_east parameter
   if (west_or_east == 2)
   {
-    // Branch over the whole sphere, start with east hemisphere
-    Branch east_branch(0, 0, PI, PI);
-    auto [upper, lower, theta] =
-        calculateBounds(line_pair_data, east_branch, ids, kernel_buffer);
-    iteration++;
-    // Update best bounds
-    best_lower = lower;
-    best_upper = upper;
+    // all space
+    Branch east_hemisphere(0, 0, PI, PI);
 
-    // Add east_branch to branches (as done in MATLAB: branch = [east_branch;upper;lower])
-    east_branch.upper_bound = upper;
-    east_branch.lower_bound = lower;
-    branches.push_back(east_branch);
+    auto [upper_bound, lower_bound, theta_candidates] =
+        calculateBounds(line_pair_data, east_hemisphere, ids, kernel_buffer);
 
-    // Cluster stabbers and get rotation candidates
-    std::vector<double> clustered_theta = clusterStabber(theta);
-    Eigen::Vector3d u_center =
-        polarToXyz(0.5 * (east_branch.alpha_min + east_branch.alpha_max),
-                   0.5 * (east_branch.phi_min + east_branch.phi_max));
-
-    // Initialize u_best and theta_best with east hemisphere results
-    for (double t : clustered_theta)
-    {
-      u_best.push_back(u_center);
-      theta_best.push_back(t);
-    }
-
-    // Set west hemisphere as next branch
-    next_branch = Branch(0, PI, PI, 2 * PI);
+    east_hemisphere.upper_bound = upper_bound;
+    east_hemisphere.lower_bound = lower_bound;
+    best_lower_bound = lower_bound;
+    updateBestSolution(east_hemisphere, theta_candidates, best_lower_bound, u_best, theta_best);
+    branch_queue.push(east_hemisphere);
+    branch_queue.push(Branch(0, PI, PI, 2 * PI)); // west hemisphere
   }
   else
   {
-    if (west_or_east == 1)
-    {
-      // Only west hemisphere
-      next_branch = Branch(0, PI, PI, 2 * PI);
-    }
-    else
-    {
-      // Only east hemisphere
-      next_branch = Branch(0, 0, PI, PI);
-    }
+    // Process single hemisphere
+    Branch initial_hemisphere = (west_or_east == 1) ? Branch(0, PI, PI, 2 * PI) : // West hemisphere
+                                    Branch(0, 0, PI, PI);                         // East hemisphere
+    branch_queue.push(initial_hemisphere);
   }
 
-  // Step 3: BnB process
-  while (true)
+  // Step 5: Main branch-and-bound loop
+  while (!branch_queue.empty())
   {
-    // Subdivide the branch into four
-    std::vector<Branch> sub_branches = next_branch.subdivide();
+    Branch current_branch = branch_queue.top();
+    branch_queue.pop();
 
-    std::vector<double> new_upper(4), new_lower(4);
-    std::vector<std::vector<double>> new_theta_lower(4);
-
-    // Calculate bounds for each sub-branch
-    for (size_t i = 0; i < 4; i++)
-    {
-      auto [upper, lower, theta] = calculateBounds(
-          line_pair_data, sub_branches[i], ids, kernel_buffer);
-      iteration++;
-      new_upper[i] = upper;
-      new_lower[i] = lower;
-      new_theta_lower[i] = theta;
-
-      sub_branches[i].upper_bound = upper;
-      sub_branches[i].lower_bound = lower;
-      branches.push_back(sub_branches[i]);
-      std::cout << "Iteration: " << iteration
-                << ", Sub-branch " << i
-                << ", Upper Bound: " << upper
-                << ", Lower Bound: " << lower
-                << ", Best Lower: " << best_lower << std::endl;
-    }
-
-    // Update best lower bound and rotation candidates
-    double sub_max_lower =
-        *std::max_element(new_lower.begin(), new_lower.end());
-
-    // Find all indices with maximum lower bound
-    std::vector<int> idx_sub_best;
-    for (size_t i = 0; i < 4; i++)
-    {
-      if (new_lower[i] == sub_max_lower)
-      {
-        idx_sub_best.push_back(i);
-      }
-    }
-
-    // Process each best sub-branch
-    for (size_t idx : idx_sub_best)
-    {
-      if (sub_max_lower > best_lower)
-      {
-        best_lower = sub_max_lower;
-
-        // Clear previous best candidates and add new ones
-        u_best.clear();
-        theta_best.clear();
-
-        std::vector<double> clustered_theta =
-            clusterStabber(new_theta_lower[idx]);
-        Eigen::Vector3d u_center = polarToXyz(
-            0.5 * (sub_branches[idx].alpha_min + sub_branches[idx].alpha_max),
-            0.5 * (sub_branches[idx].phi_min + sub_branches[idx].phi_max));
-
-        for (double t : clustered_theta)
-        {
-          u_best.push_back(u_center);
-          theta_best.push_back(t);
-        }
-      }
-      else if (sub_max_lower == best_lower)
-      {
-        // Add to existing best candidates
-        std::vector<double> clustered_theta =
-            clusterStabber(new_theta_lower[idx]);
-        Eigen::Vector3d u_center = polarToXyz(
-            0.5 * (sub_branches[idx].alpha_min + sub_branches[idx].alpha_max),
-            0.5 * (sub_branches[idx].phi_min + sub_branches[idx].phi_max));
-
-        for (double t : clustered_theta)
-        {
-          u_best.push_back(u_center);
-          theta_best.push_back(t);
-        }
-      }
-    }
-
-    // Prune branches with lower bound less than best_lower (as in MATLAB)
-    branches.erase(std::remove_if(branches.begin(), branches.end(),
-                                  [best_lower](const Branch &b)
-                                  {
-                                    return b.upper_bound < best_lower;
-                                  }),
-                   branches.end());
-
-    // Find next branch with best upper bound and largest size
-    if (branches.empty())
-      break;
-
-    best_upper = -1.0;
-    int best_idx = -1;
-    double largest_size = -1.0;
-
-    // Find branches with best upper bound
-    for (size_t i = 0; i < branches.size(); i++)
-    {
-      best_upper = std::max(best_upper, branches[i].upper_bound);
-    }
-
-    // Among branches with best upper bound, find the one with largest size
-    for (size_t i = 0; i < branches.size(); i++)
-    {
-      if (branches[i].upper_bound == best_upper)
-      {
-        double branch_size = branches[i].alpha_max - branches[i].alpha_min;
-        if (branch_size > largest_size)
-        {
-          largest_size = branch_size;
-          best_idx = i;
-        }
-      }
-    }
-
-    next_branch = branches[best_idx];
-    branches.erase(branches.begin() + best_idx);
-
-    // Stop condition
-    if ((next_branch.alpha_max - next_branch.alpha_min) < branch_resolution_)
+    if (current_branch.size() < branch_resolution_)
     {
       break;
+    }
+
+    std::vector<Branch> sub_branches = current_branch.subdivide();
+    for (auto &sb : sub_branches)
+    {
+      // Calculate bounds for this sub-branch
+      auto [upper_bound, lower_bound, theta_candidates] =
+          calculateBounds(line_pair_data, sb, ids, kernel_buffer);
+
+      sb.upper_bound = upper_bound;
+      sb.lower_bound = lower_bound;
+
+      // Update best solution if this sub-branch has better lower bound
+      double previous_best_lower = best_lower_bound;
+      updateBestSolution(sb, theta_candidates, best_lower_bound,
+                         u_best, theta_best);
+
+      std::cout << "iter: " << ++iteration_count
+                << ", upper: " << sb.upper_bound
+                << ", lower: " << sb.lower_bound
+                << ", best : " << best_lower_bound << std::endl;
+
+      // If we found a better lower bound, prune unpromising branches from queue
+      if (best_lower_bound > previous_best_lower)
+      {
+        pruneBranchQueue(branch_queue, best_lower_bound);
+      }
+
+      // Add to queue if upper bound is promising (pruning condition)
+      if (upper_bound >= best_lower_bound)
+      {
+        branch_queue.push(sb);
+      }
     }
   }
 
-  // Step 4: Generate rotation matrices
+  // Step 6: Generate rotation matrices
   size_t res_sz = u_best.size();
   std::vector<Eigen::Matrix3d> R_opt(res_sz);
   for (size_t i = 0; i < res_sz; i++)
@@ -725,7 +617,6 @@ std::vector<double> RotFGO::upperInterval(double A_1, double phi_1,
   // A_1*sin(theta + phi_1) + const_1 >= -epsilon
   // A_2*sin(theta + phi_2) + const_2 <= epsilon
   // Where A_1,phi_1,const_1 are upper bounds, A_2,phi_2,const_2 are lower bounds
-
   std::vector<double> upper_intervals, lower_intervals;
 
   // Helper function to intersect two intervals [a1, a2] and [b1, b2]
@@ -1547,8 +1438,7 @@ std::vector<double> RotFGO::clusterStabber(const std::vector<double> &theta)
   return stabber_clustered;
 }
 
-Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids,
-                                           bool use_saturated)
+Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
 {
   int max_id = *std::max_element(ids.begin(), ids.end());
   int num_2d_lines = max_id + 1;
@@ -1564,7 +1454,7 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids,
   Eigen::MatrixXd kernel_buffer =
       Eigen::MatrixXd::Zero(num_2d_lines, max_count);
 
-  if (!use_saturated)
+  if (!use_saturated_)
   {
     // Classic consensus maximization - all weights are 1
     kernel_buffer.setOnes();
@@ -1595,4 +1485,76 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids,
   }
 
   return kernel_buffer;
+}
+
+void RotFGO::processInitialBranch(Branch &branch, const LinePairData &line_pair_data,
+                                  const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
+                                  double &best_lower_bound, std::vector<Eigen::Vector3d> &best_axes,
+                                  std::vector<double> &best_angles)
+{
+  // Calculate bounds for the initial branch
+  auto [upper_bound, lower_bound, theta_candidates] =
+      calculateBounds(line_pair_data, branch, ids, kernel_buffer);
+
+  branch.upper_bound = upper_bound;
+  branch.lower_bound = lower_bound;
+
+  best_lower_bound = lower_bound;
+  updateBestSolution(branch, theta_candidates, best_lower_bound, best_axes, best_angles);
+}
+
+void RotFGO::updateBestSolution(const Branch &branch,
+                                const std::vector<double> &theta_candidates,
+                                double &best_lower_bound,
+                                std::vector<Eigen::Vector3d> &best_axes,
+                                std::vector<double> &best_angles)
+{
+  if (branch.lower_bound > best_lower_bound)
+  {
+    best_lower_bound = branch.lower_bound;
+    best_axes.clear();
+    best_angles.clear();
+
+    std::vector<double> clustered_theta = clusterStabber(theta_candidates);
+    Eigen::Vector3d rotation_axis = polarToXyz(
+        0.5 * (branch.alpha_min + branch.alpha_max),
+        0.5 * (branch.phi_min + branch.phi_max));
+
+    // Add all clustered candidates
+    for (double theta : clustered_theta)
+    {
+      best_axes.push_back(rotation_axis);
+      best_angles.push_back(theta);
+    }
+  }
+  else if (std::abs(branch.lower_bound - best_lower_bound) < 1e-10)
+  {
+    // Found an equally good solution - add to existing candidates
+    std::vector<double> clustered_theta = clusterStabber(theta_candidates);
+
+    Eigen::Vector3d rotation_axis = polarToXyz(
+        0.5 * (branch.alpha_min + branch.alpha_max),
+        0.5 * (branch.phi_min + branch.phi_max));
+
+    for (double theta : clustered_theta)
+    {
+      best_axes.push_back(rotation_axis);
+      best_angles.push_back(theta);
+    }
+  }
+}
+
+// Transfer only promising branches (where upper_bound >= best_lower_bound)
+void RotFGO::pruneBranchQueue(BranchQueue &branch_queue, double best_lower_bound)
+{
+  BranchQueue pruned_queue;
+  while (!branch_queue.empty())
+  {
+    Branch branch = branch_queue.top();
+    branch_queue.pop();
+    if (branch.upper_bound < best_lower_bound)
+      break;
+    pruned_queue.push(branch);
+  }
+  branch_queue = std::move(pruned_queue);
 }
