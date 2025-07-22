@@ -7,8 +7,6 @@
 #include <vector>
 #include <queue>
 
-// Configuration structure for RotFGO parameters
-
 struct LinePairData
 {
   std::vector<Eigen::Vector3d> vector_n;
@@ -49,14 +47,12 @@ struct Branch
         upper_bound(u_bound), lower_bound(l_bound) {}
 
   // Get the size of the branch (for tie-breaking)
-  // Inline and constexpr for better performance
   constexpr double size() const noexcept
   {
     return alpha_max - alpha_min;
   }
 
-  // Subdivide this branch into four sub-branches
-  std::vector<Branch> subdivide() const
+  std::vector<Branch> subDivide() const
   {
     // Compute midpoints for alpha and phi
     double alpha_mid = 0.5 * (alpha_min + alpha_max);
@@ -69,8 +65,7 @@ struct Branch
     };
   }
 
-  // Embedded comparator for priority queue
-  // Prioritize by upper_bound (descending), then by size (descending)
+  // by upper_bound (descending), then by size (descending)
   struct Comparator
   {
     inline bool operator()(const Branch &a, const Branch &b) const noexcept
@@ -78,18 +73,18 @@ struct Branch
       const double diff = a.upper_bound - b.upper_bound;
       if (std::abs(diff) < 1e-10)
       {
-        return a.size() < b.size(); // Prioritize larger branch size
+        return a.size() < b.size(); // larger branch size first
       }
-      return diff < 0; // Prioritize higher upper bound
+      return diff < 0; // higher upper bound first
     }
   };
 };
 
 class RotFGO
 {
-
 public:
   using BranchQueue = std::priority_queue<Branch, std::vector<Branch>, Branch::Comparator>;
+  // configuration structure for RotFGO parameters
   struct RotFGOConfig
   {
     double branch_resolution;
@@ -120,7 +115,6 @@ public:
   //   }
   // };
 
-  // Constructor using configuration struct
   RotFGO(const RotFGOConfig &config)
       : branch_resolution_(config.branch_resolution), epsilon_r_(config.epsilon_r),
         sample_resolution_(config.sample_resolution), prox_threshold_(config.prox_threshold),
@@ -135,7 +129,6 @@ public:
 
   ~RotFGO() {}
 
-  // Main solving function
   std::vector<Eigen::Matrix3d>
   solve(const std::vector<Eigen::Vector3d> &vector_n,
         const std::vector<Eigen::Vector3d> &vector_v,
@@ -143,10 +136,10 @@ public:
         int west_or_east = 2);
 
 private:
-  // Data preprocessing
+  // Kernel buffer creation (now non-static)
+  Eigen::MatrixXd createKernelBuffer(const std::vector<int> &ids);
   LinePairData dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
                            const std::vector<Eigen::Vector3d> &vector_v);
-  // Helper functions for normal calculation, ref by dataProcess()
   std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
   calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
 
@@ -159,44 +152,35 @@ private:
   void pruneBranchQueue(BranchQueue &branch_queue,
                         double best_lower_bound);
 
-  // Bound calculation
   std::vector<double> calculateBounds(const LinePairData &line_pair_data, Branch &branch,
                                       const std::vector<int> &ids,
                                       const Eigen::MatrixXd &kernel_buffer);
 
-  // Interval stabbing
   std::pair<double, std::vector<double>> saturatedIntervalStabbing(
       const std::vector<double> &intervals, const std::vector<int> &ids,
       const Eigen::MatrixXd &kernel_buffer);
 
-  // Helper functions for coordinate conversion
-  Eigen::Vector3d polarToXyz(double alpha, double phi);
-  std::pair<double, double> xyzToPolar(const Eigen::Vector3d &axis);
-
-  // Interval calculation functions
   std::vector<double> lowerInterval(double A, double phi, double constant);
   std::vector<double> upperInterval(double A_1, double phi_1,
                                     double const_1, double A_2,
                                     double phi_2, double const_2);
 
-  // H1 and H2 interval mapping
   std::pair<std::vector<double>, std::vector<double>>
   h1IntervalMapping(const LinePairData &line_pair_data, const Branch &branch);
   std::pair<std::vector<double>, std::vector<double>>
   h2IntervalMapping(const LinePairData &line_pair_data, const Branch &branch);
 
-  // Parameter calculation
   std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>
   calcIntervalParams(const std::vector<double> &inner_product,
                      const std::vector<double> &h1, const std::vector<double> &h2);
 
-  // Clustering
+  // cluster similar stabbers
   std::vector<double> clusterStabber(const std::vector<double> &theta);
 
-  // Kernel buffer creation (now non-static)
-  Eigen::MatrixXd createKernelBuffer(const std::vector<int> &ids);
+  Eigen::Vector3d polarToXyz(double alpha, double phi) noexcept;
+  std::pair<double, double> xyzToPolar(const Eigen::Vector3d &axis) noexcept;
 
-  // Algorithm parameters stored as member variables
+  // hyperparameters
   double branch_resolution_;
   double epsilon_r_;
   double sample_resolution_;

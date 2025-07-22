@@ -26,16 +26,13 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   LinePairData line_pair_data = dataProcess(vector_n, vector_v);
 
   // Step 3: Initialize branch-and-bound process
+  BranchQueue q;
+
   double best_lb = -1.0;
   double pre_best_lb = -1.0;
   std::vector<Eigen::Vector3d> u_best;
   std::vector<double> theta_best;
-
-  // Priority queue to manage branches based on upper bound
-  // (and size for tie-breaking)
-  BranchQueue q;
-
-  int iteration_count = 0;
+  int iter = 0;
 
   // Step 4: Initialize with hemisphere(s) based on west_or_east parameter
   if (west_or_east == 2)
@@ -51,7 +48,6 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
 
     updateBestSolution(east_hemisphere, theta_candidates_east, best_lb, u_best, theta_best);
     updateBestSolution(west_hemisphere, theta_candidates_west, best_lb, u_best, theta_best);
-
     q.push(east_hemisphere);
     q.push(west_hemisphere);
   }
@@ -66,17 +62,13 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   // Step 5: Main branch-and-bound loop
   while (!q.empty())
   {
-    Branch current_branch = q.top();
+    Branch cur_branch = std::move(q.top());
     q.pop();
 
-    if (current_branch.size() < branch_resolution_)
-    {
+    if (cur_branch.size() < branch_resolution_)
       break;
-    }
 
-    std::vector<Branch> sub_branches = current_branch.subdivide();
-
-    // Process all 4 sub-branches concurrently
+    std::vector<Branch> sub_branches = std::move(cur_branch.subDivide());
     std::array<std::future<std::vector<double>>, 4> futures;
     for (int i = 0; i < 4; ++i)
     {
@@ -90,12 +82,11 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
     for (int i = 0; i < 4; ++i)
     {
       auto theta_candidates = futures[i].get();
-
       pre_best_lb = best_lb;
       updateBestSolution(sub_branches[i], theta_candidates, best_lb,
                          u_best, theta_best);
 
-      // std::cout << "iter: " << ++iteration_count
+      // std::cout << "iter: " << ++iter
       //           << ", upper: " << sub_branches[i].upper_bound
       //           << ", lower: " << sub_branches[i].lower_bound
       //           << ", best : " << best_lb << std::endl;
@@ -126,7 +117,6 @@ LinePairData RotFGO::dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
   LinePairData data;
   size_t N = vector_n.size();
   data.size = N;
-
   data.vector_n = vector_n;
   data.vector_v = vector_v;
   data.outer_product.resize(N);
@@ -169,7 +159,6 @@ LinePairData RotFGO::dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
       data.vector_outer_west[i] = data.outer_product[i];
     }
 
-    // Convert to polar coordinates
     auto [alpha, phi] = xyzToPolar(data.outer_product[i]);
     if (phi > PI)
     {
@@ -182,10 +171,8 @@ LinePairData RotFGO::dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
       data.outer_west[i] = Eigen::Vector2d(PI - alpha, phi + PI);
     }
 
-    // Inner product
     data.inner_product[i] = v.dot(n);
 
-    // Calculate normals
     auto [normal_east, normal_west, o_normal_east, o_normal_west] =
         calculateNormals(n, v);
     data.normal_east[i] = normal_east;
@@ -193,17 +180,14 @@ LinePairData RotFGO::dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
     data.o_normal_east[i] = o_normal_east;
     data.o_normal_west[i] = o_normal_west;
 
-    // Convert normals to xyz
     data.vector_normal_east[i] = polarToXyz(normal_east(0), normal_east(1));
     data.vector_normal_west[i] = polarToXyz(normal_west(0), normal_west(1));
     data.vector_o_normal_east[i] =
         polarToXyz(o_normal_east(0), o_normal_east(1));
     data.vector_o_normal_west[i] =
         polarToXyz(o_normal_west(0), o_normal_west(1));
-
     data.outer_norm[i] = data.outer_product[i].norm();
   }
-
   return data;
 }
 
@@ -212,8 +196,6 @@ std::pair<double, std::vector<double>> RotFGO::saturatedIntervalStabbing(
     const Eigen::MatrixXd &kernel_buffer)
 {
   size_t L = ids.size();
-
-  // Create endpoint events
   std::vector<std::pair<double, std::pair<int, int>>>
       events; // (value, (mask, id_index))
 
@@ -222,7 +204,6 @@ std::pair<double, std::vector<double>> RotFGO::saturatedIntervalStabbing(
     events.emplace_back(std::make_pair(intervals[2 * i], std::make_pair(0, i)));     // entering interval
     events.emplace_back(std::make_pair(intervals[2 * i + 1], std::make_pair(1, i))); // exiting interval
   }
-
   // Sort events by value
   std::sort(events.begin(), events.end());
   int max_id = *std::max_element(ids.begin(), ids.end());
@@ -247,7 +228,6 @@ std::pair<double, std::vector<double>> RotFGO::saturatedIntervalStabbing(
       if (score >= best_score)
       {
         double next_pos = events[i + 1].first;
-
         // Generate stabbers in this interval using the MATLAB approach
         std::vector<double> new_stabbers;
 
@@ -285,41 +265,32 @@ std::pair<double, std::vector<double>> RotFGO::saturatedIntervalStabbing(
   return {best_score, stabbers};
 }
 
-Eigen::Vector3d RotFGO::polarToXyz(double alpha, double phi)
+Eigen::Vector3d RotFGO::polarToXyz(double alpha, double phi) noexcept
 {
   double sin_alpha = std::sin(alpha);
   return Eigen::Vector3d(sin_alpha * std::cos(phi), sin_alpha * std::sin(phi),
                          std::cos(alpha));
 }
 
-std::pair<double, double> RotFGO::xyzToPolar(const Eigen::Vector3d &axis)
+std::pair<double, double> RotFGO::xyzToPolar(const Eigen::Vector3d &axis) noexcept
 {
   double length = axis.norm();
   if (length == 0)
-  {
     return {0.0, 0.0};
-  }
 
   Eigen::Vector3d unit_axis = axis / length;
-
   double alpha = std::atan2(
       std::sqrt(unit_axis(0) * unit_axis(0) + unit_axis(1) * unit_axis(1)),
       unit_axis(2));
   double phi;
 
   if (unit_axis(0) == 0 && unit_axis(1) == 0)
-  {
     phi = 0.0;
-  }
   else
-  {
     phi = std::atan2(unit_axis(1), unit_axis(0));
-  }
 
   if (phi < 0)
-  {
     phi += 2 * PI;
-  }
 
   return {alpha, phi};
 }
@@ -328,7 +299,6 @@ std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
 RotFGO::calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2)
 {
   Eigen::Vector3d mid = (v1 + v2) / 2.0;
-
   Eigen::Vector2d normal_east, normal_west, o_normal_east, o_normal_west;
 
   if (mid.norm() < 1e-4)
@@ -351,11 +321,9 @@ RotFGO::calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2)
   }
 
   mid.normalize();
-  Eigen::Vector3d cross_nv = v1.cross(v2);
-  cross_nv.normalize();
+  Eigen::Vector3d cross_nv = (v1.cross(v2)).normalized();
   Eigen::Vector3d orthogonal = mid.cross(cross_nv);
   orthogonal.normalize();
-
   auto [alpha_mid, phi_mid] = xyzToPolar(mid);
   auto [alpha_orthogonal, phi_orthogonal] = xyzToPolar(orthogonal);
 
@@ -380,20 +348,16 @@ RotFGO::calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2)
     o_normal_east = Eigen::Vector2d(alpha_orthogonal, phi_orthogonal);
     o_normal_west = Eigen::Vector2d(PI - alpha_orthogonal, phi_orthogonal + PI);
   }
-
   return std::make_tuple(normal_east, normal_west, o_normal_east, o_normal_west);
 }
 
 std::vector<double> RotFGO::lowerInterval(double A, double phi, double constant)
 {
   std::vector<double> interval;
-
   if (A == 0)
     return {};
-
   double c_up = -constant + epsilon_r_;
   double c_lo = -constant - epsilon_r_;
-
   if (c_up <= -A)
   {
     return {};
@@ -600,7 +564,7 @@ std::vector<double> RotFGO::lowerInterval(double A, double phi, double constant)
     }
   }
 
-  // Filter out invalid intervals and normalize
+  // filter out invalid intervals and normalize
   std::vector<double> result;
   for (size_t i = 0; i < interval.size(); i += 2)
   {
@@ -615,7 +579,6 @@ std::vector<double> RotFGO::lowerInterval(double A, double phi, double constant)
       }
     }
   }
-
   return result;
 }
 
@@ -629,17 +592,12 @@ std::vector<double> RotFGO::upperInterval(double A_1, double phi_1,
   // Where A_1,phi_1,const_1 are upper bounds, A_2,phi_2,const_2 are lower bounds
   std::vector<double> upper_intervals, lower_intervals;
 
-  // Helper function to intersect two intervals [a1, a2] and [b1, b2]
   auto intersectInterval = [](double a1, double a2, double b1, double b2) -> std::vector<double>
   {
     if (a2 < b1 || b2 < a1)
-    {
       return {};
-    }
     else
-    {
       return {std::max(a1, b1), std::min(a2, b2)};
-    }
   };
 
   // First constraint: A_1*sin(theta + phi_1) + const_1 >= -epsilon
@@ -747,7 +705,6 @@ std::vector<double> RotFGO::upperInterval(double A_1, double phi_1,
     return {};
   }
 
-  // Intersect all pairs of intervals
   std::vector<double> result;
   int num_upper = upper_intervals.size() / 2;
   int num_lower = lower_intervals.size() / 2;
@@ -791,12 +748,10 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
 {
   size_t N = line_pair_data.size;
   std::vector<double> h1_upper(N), h1_lower(N);
-
   double cube_width = branch.alpha_max - branch.alpha_min;
   std::vector<double> range_alpha = {branch.alpha_min, branch.alpha_max};
   std::vector<double> range_phi = {branch.phi_min, branch.phi_max};
 
-  // Helper function for interval projection
   auto intervalProjection = [](double a, const std::vector<double> &interval) -> std::pair<double, double>
   {
     double far, near;
@@ -863,7 +818,6 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
       // Find minimum
       double minimum = std::min(x.dot(polarToXyz(range_alpha[0], phi_far)),
                                 x.dot(polarToXyz(range_alpha[1], phi_far)));
-
       if (flag == 1)
       {
         h1_upper[i] = maximum;
@@ -878,7 +832,7 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
   }
   else
   {
-    // Large cube case
+    // large cube case
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(4)
 #endif
@@ -904,17 +858,14 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
 
       outer_alpha = outer_angle(0);
       outer_phi = outer_angle(1);
-
       auto [phi_far, phi_near] = intervalProjection(outer_phi, range_phi);
       auto [alpha_far, alpha_near] = intervalProjection(outer_alpha, range_alpha);
-
       bool is_north = range_alpha[0] <= PI / 2 && range_alpha[1] <= PI / 2;
       bool is_south = !is_north;
 
       // Find maximum (complex logic from MATLAB)
       double maximum;
       double delta_phi_near = std::abs(phi_near - outer_phi);
-
       if (std::abs(outer_alpha - PI / 2) < 1e-5 && (range_alpha[0] >= PI / 2 || range_alpha[1] <= PI / 2))
       {
         if ((delta_phi_near <= PI / 2 && is_north) || (delta_phi_near > PI / 2 && is_south))
@@ -1005,7 +956,6 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
       // Find minimum (complex logic from MATLAB)
       double minimum;
       double delta_phi_far = std::abs(phi_far - outer_phi);
-
       if (std::abs(outer_alpha - PI / 2) < 1e-5 && (range_alpha[0] >= PI / 2 || range_alpha[1] <= PI / 2))
       {
         if ((delta_phi_far <= PI / 2 && is_north) || (delta_phi_far > PI / 2 && is_south))
@@ -1101,7 +1051,6 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
       }
     }
   }
-
   return {h1_upper, h1_lower};
 }
 
@@ -1111,9 +1060,7 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
 {
   size_t N = line_pair_data.size;
   std::vector<double> h2_upper(N), h2_lower(N);
-
   std::vector<Eigen::Vector3d> vertex_cache;
-
   if (branch.alpha_max - branch.alpha_min <= sample_resolution_)
   {
     // Small cube - use 4 vertices
@@ -1125,11 +1072,10 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
   }
   else
   {
-    // Large cube - sample boundaries following MATLAB pattern exactly
+    // large cube - sample boundaries following MATLAB pattern exactly
     // MATLAB: alpha = branch(1):sample_resolution:branch(3);
     // MATLAB: phi = branch(2):sample_resolution:branch(4);
     std::vector<double> alpha_range, phi_range;
-
     for (double a = branch.alpha_min; a <= branch.alpha_max + 1e-10; a += sample_resolution_)
     {
       alpha_range.emplace_back(std::min(a, branch.alpha_max));
@@ -1149,25 +1095,21 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
       temp = 1; // Ensure at least 1
 
     vertex_cache.reserve(temp * 4);
-
     // MATLAB: vertex_cache(1:temp,:)=vec_polar2xyz(alpha(1:temp),phi(1));
     for (size_t a = 0; a < temp; a++)
     {
       vertex_cache.emplace_back(polarToXyz(alpha_range[a], phi_range[0]));
     }
-
     // MATLAB: vertex_cache(temp+1:2*temp,:) = vec_polar2xyz(alpha(end),phi(1:temp));
     for (size_t p = 0; p < temp; p++)
     {
       vertex_cache.emplace_back(polarToXyz(alpha_range.back(), phi_range[p]));
     }
-
     // MATLAB: vertex_cache(2*temp+1:3*temp,:) = vec_polar2xyz(alpha(2:end),phi(end));
     for (size_t a = 1; a < alpha_range.size(); a++)
     {
       vertex_cache.emplace_back(polarToXyz(alpha_range[a], phi_range.back()));
     }
-
     // MATLAB: vertex_cache(3*temp+1:4*temp,:)=vec_polar2xyz(alpha(1),phi(2:end));
     for (size_t p = 1; p < phi_range.size(); p++)
     {
@@ -1183,7 +1125,6 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
     const Eigen::Vector3d &n_i = line_pair_data.vector_n[i];
     const Eigen::Vector3d &v_i = line_pair_data.vector_v[i];
     double inner_product = line_pair_data.inner_product[i];
-
     Eigen::Vector2d normal_angle, o_normal_angle;
     Eigen::Vector3d normal_vector, o_normal_vector;
 
@@ -1206,12 +1147,10 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
                              normal_angle(0) <= branch.alpha_max &&
                              normal_angle(1) >= branch.phi_min &&
                              normal_angle(1) <= branch.phi_max);
-
     bool o_normal_in_branch = (o_normal_angle(0) >= branch.alpha_min &&
                                o_normal_angle(0) <= branch.alpha_max &&
                                o_normal_angle(1) >= branch.phi_min &&
                                o_normal_angle(1) <= branch.phi_max);
-
     int flag = (normal_in_branch ? 2 : 0) + (o_normal_in_branch ? 1 : 0);
 
     double maximum = std::numeric_limits<double>::lowest();
@@ -1253,7 +1192,6 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
       }
       break;
     }
-
     h2_upper[i] = maximum - inner_product;
     h2_lower[i] = minimum - inner_product;
   }
@@ -1267,14 +1205,12 @@ std::vector<double> RotFGO::calculateBounds(
     const Eigen::MatrixXd &kernel_buffer)
 {
   size_t N = line_pair_data.size;
-
-  // Calculate lower bound using center point
   Eigen::Vector3d u_center =
       polarToXyz(0.5 * (branch.alpha_min + branch.alpha_max),
                  0.5 * (branch.phi_min + branch.phi_max));
   std::vector<double> h1_center(N), h2_center(N);
 
-  // #ifdef _OPENMP
+  // #ifdef _OPENMP // TODO: check optimum num or use SIMD
   // #pragma omp parallel for schedule(static) num_threads(4)
   // #endif
   for (size_t i = 0; i < N; i++)
@@ -1288,9 +1224,11 @@ std::vector<double> RotFGO::calculateBounds(
   auto [A_center, phi_center, const_center] =
       calcIntervalParams(line_pair_data.inner_product, h1_center, h2_center);
 
-  // Prepare intervals for lower bound
   std::vector<double> intervals_lower;
   std::vector<int> ids_lower;
+  // Pre-estimate capacity to reduce reallocations
+  intervals_lower.reserve(N * 2); // Estimate 2 intervals per line on average
+  ids_lower.reserve(N);
 
   for (size_t i = 0; i < N; i++)
   {
@@ -1320,7 +1258,6 @@ std::vector<double> RotFGO::calculateBounds(
       h1IntervalMapping(line_pair_data, branch);
   auto [h2_upper, h2_lower] =
       h2IntervalMapping(line_pair_data, branch);
-
   auto [A_lower, phi_lower, const_lower] =
       calcIntervalParams(line_pair_data.inner_product, h1_lower, h2_lower);
   auto [A_upper, phi_upper, const_upper] =
@@ -1329,6 +1266,8 @@ std::vector<double> RotFGO::calculateBounds(
   // Prepare intervals for upper bound
   std::vector<double> intervals_upper;
   std::vector<int> ids_upper;
+  intervals_upper.reserve(N * 2);
+  ids_upper.reserve(N);
   for (size_t i = 0; i < N; i++)
   {
     std::vector<double> tmp_interval =
@@ -1350,7 +1289,6 @@ std::vector<double> RotFGO::calculateBounds(
                                                 kernel_buffer);
     branch.upper_bound = score;
   }
-
   return theta_lower;
 }
 
@@ -1361,7 +1299,6 @@ RotFGO::calcIntervalParams(const std::vector<double> &inner_product,
 {
   size_t N = inner_product.size();
   std::vector<double> A(N), phi(N), constant(N);
-
   for (size_t i = 0; i < N; i++)
   {
     A[i] = std::sqrt(h1[i] * h1[i] + h2[i] * h2[i]);
@@ -1370,7 +1307,6 @@ RotFGO::calcIntervalParams(const std::vector<double> &inner_product,
       phi[i] += 2 * PI;
     constant[i] = inner_product[i] + h2[i];
   }
-
   return std::make_tuple(A, phi, constant);
 }
 
@@ -1378,13 +1314,11 @@ std::vector<double> RotFGO::clusterStabber(const std::vector<double> &theta)
 {
   if (theta.empty())
     return {};
-
   if (theta.size() == 1)
     return {theta[0]};
 
   std::vector<double> sorted_theta = theta;
   std::sort(sorted_theta.begin(), sorted_theta.end());
-
   std::vector<double> stabber_buffer;
   std::vector<double> stabber_clustered;
 
@@ -1448,7 +1382,6 @@ std::vector<double> RotFGO::clusterStabber(const std::vector<double> &theta)
 
     stabber_clustered.emplace_back(median_stabber);
   }
-
   return stabber_clustered;
 }
 
@@ -1456,18 +1389,13 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
 {
   int max_id = *std::max_element(ids.begin(), ids.end());
   int num_2d_lines = max_id + 1;
-
-  // Count matches per 2D line
   std::vector<int> match_count(num_2d_lines, 0);
   for (size_t id : ids)
-  {
     match_count[id]++;
-  }
 
   int max_count = *std::max_element(match_count.begin(), match_count.end());
   Eigen::MatrixXd kernel_buffer =
       Eigen::MatrixXd::Zero(num_2d_lines, max_count);
-
   if (!use_saturated_)
   {
     kernel_buffer.setOnes();
@@ -1511,13 +1439,10 @@ void RotFGO::updateBestSolution(const Branch &branch,
     best_lb = branch.lower_bound;
     best_axes.clear();
     best_angles.clear();
-
     std::vector<double> clustered_theta = clusterStabber(theta_candidates);
     Eigen::Vector3d rotation_axis = polarToXyz(
         0.5 * (branch.alpha_min + branch.alpha_max),
         0.5 * (branch.phi_min + branch.phi_max));
-
-    // Add all clustered candidates
     for (double theta : clustered_theta)
     {
       best_axes.emplace_back(rotation_axis);
@@ -1528,11 +1453,9 @@ void RotFGO::updateBestSolution(const Branch &branch,
   {
     // Found an equally good solution - add to existing candidates
     std::vector<double> clustered_theta = clusterStabber(theta_candidates);
-
     Eigen::Vector3d rotation_axis = polarToXyz(
         0.5 * (branch.alpha_min + branch.alpha_max),
         0.5 * (branch.phi_min + branch.phi_max));
-
     for (double theta : clustered_theta)
     {
       best_axes.emplace_back(rotation_axis);
@@ -1547,11 +1470,11 @@ void RotFGO::pruneBranchQueue(BranchQueue &bq, double best_lb)
   BranchQueue promising;
   while (!bq.empty())
   {
-    Branch branch = bq.top();
-    bq.pop();
+    const Branch &branch = bq.top();
     if (branch.upper_bound < best_lb)
       break;
-    promising.push(branch);
+    promising.push(std::move(const_cast<Branch &>(branch)));
+    bq.pop();
   }
   bq = std::move(promising);
 }
