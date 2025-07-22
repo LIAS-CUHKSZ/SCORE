@@ -97,42 +97,41 @@ public:
     double sample_resolution;
     double prox_threshold;
     bool use_saturated;
-    int init_branch_flag; // 0 for east only, 1 for west only, 2 for both
 
-    RotFGOConfig(double branch_res, double eps, double sample_res, double prox_thresh,
-                 bool saturated = true, int init_branch = 0)
+    RotFGOConfig(double branch_res, double eps, double sample_res,
+                 double prox_thresh, bool saturated = true)
         : branch_resolution(branch_res), epsilon_r(eps), sample_resolution(sample_res),
-          prox_threshold(prox_thresh), use_saturated(saturated), init_branch_flag(init_branch) {}
+          prox_threshold(prox_thresh), use_saturated(saturated) {}
   };
 
-  struct SolverStats
-  {
-    int total_iterations = 0;
-    int branches_processed = 0;
-    int branches_pruned = 0;
-    double bound_calculation_time = 0.0;
-    double pruning_time = 0.0;
-    double total_time = 0.0;
+  // struct SolverStats
+  // {
+  //   int total_iterations = 0;
+  //   int branches_processed = 0;
+  //   int branches_pruned = 0;
+  //   double bound_calculation_time = 0.0;
+  //   double pruning_time = 0.0;
+  //   double total_time = 0.0;
 
-    void reset()
-    {
-      total_iterations = branches_processed = branches_pruned = 0;
-      bound_calculation_time = pruning_time = total_time = 0.0;
-    }
-  };
+  //   void reset()
+  //   {
+  //     total_iterations = branches_processed = branches_pruned = 0;
+  //     bound_calculation_time = pruning_time = total_time = 0.0;
+  //   }
+  // };
 
   // Constructor using configuration struct
   RotFGO(const RotFGOConfig &config)
       : branch_resolution_(config.branch_resolution), epsilon_r_(config.epsilon_r),
         sample_resolution_(config.sample_resolution), prox_threshold_(config.prox_threshold),
-        use_saturated_(config.use_saturated), init_branch_flag_(config.init_branch_flag) {}
+        use_saturated_(config.use_saturated) {}
 
   // Legacy constructor for backward compatibility
   RotFGO(double branch_resolution, double epsilon_r,
          double sample_resolution, double prox_threshold, bool use_saturated = true)
       : branch_resolution_(branch_resolution), epsilon_r_(epsilon_r),
         sample_resolution_(sample_resolution), prox_threshold_(prox_threshold),
-        use_saturated_(use_saturated), init_branch_flag_(true) {}
+        use_saturated_(use_saturated) {}
 
   ~RotFGO() {}
 
@@ -151,11 +150,6 @@ private:
   std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
   calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
 
-  void processInitialBranch(Branch &branch, const LinePairData &line_pair_data,
-                            const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
-                            double &best_lower_bound, std::vector<Eigen::Vector3d> &best_axes,
-                            std::vector<double> &best_angles);
-
   void updateBestSolution(const Branch &branch,
                           const std::vector<double> &theta_candidates,
                           double &best_lower_bound,
@@ -166,10 +160,9 @@ private:
                         double best_lower_bound);
 
   // Bound calculation
-  std::tuple<double, double, std::vector<double>>
-  calculateBounds(const LinePairData &line_pair_data, const Branch &branch,
-                  const std::vector<int> &ids,
-                  const Eigen::MatrixXd &kernel_buffer);
+  std::vector<double> calculateBounds(const LinePairData &line_pair_data, Branch &branch,
+                                      const std::vector<int> &ids,
+                                      const Eigen::MatrixXd &kernel_buffer);
 
   // Interval stabbing
   std::pair<double, std::vector<double>> saturatedIntervalStabbing(
@@ -194,8 +187,8 @@ private:
 
   // Parameter calculation
   std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>
-  calculateParams(const std::vector<double> &inner_product,
-                  const std::vector<double> &h1, const std::vector<double> &h2);
+  calcIntervalParams(const std::vector<double> &inner_product,
+                     const std::vector<double> &h1, const std::vector<double> &h2);
 
   // Clustering
   std::vector<double> clusterStabber(const std::vector<double> &theta);
@@ -209,7 +202,6 @@ private:
   double sample_resolution_;
   double prox_threshold_;
   bool use_saturated_;
-  int init_branch_flag_;
 };
 
 #endif // ROTFGO_H
