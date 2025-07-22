@@ -5,7 +5,7 @@
 #include <iostream>
 #include <queue>
 
-const double PI = M_PI;
+constexpr double PI = M_PI;
 
 std::vector<Eigen::Matrix3d>
 RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
@@ -20,13 +20,14 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   LinePairData line_pair_data = dataProcess(vector_n, vector_v);
 
   // Step 3: Initialize branch-and-bound process
-  double best_lower_bound = -1.0;
+  double best_lb = -1.0;
+  double pre_best_lb = -1.0;
   std::vector<Eigen::Vector3d> u_best;
   std::vector<double> theta_best;
 
   // Priority queue to manage branches based on upper bound
   // (and size for tie-breaking)
-  BranchQueue branch_queue;
+  BranchQueue q;
 
   int iteration_count = 0;
 
@@ -44,28 +45,28 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
 
     east_hemisphere.upper_bound = ub_east;
     east_hemisphere.lower_bound = lb_east;
-    updateBestSolution(east_hemisphere, theta_candidates, best_lower_bound, u_best, theta_best);
+    updateBestSolution(east_hemisphere, theta_candidates, best_lb, u_best, theta_best);
 
     west_hemisphere.upper_bound = ub_west;
     west_hemisphere.lower_bound = lb_west;
-    updateBestSolution(west_hemisphere, theta_candidates_west, best_lower_bound, u_best, theta_best);
+    updateBestSolution(west_hemisphere, theta_candidates_west, best_lb, u_best, theta_best);
 
-    branch_queue.push(east_hemisphere);
-    branch_queue.push(west_hemisphere);
+    q.push(east_hemisphere);
+    q.push(west_hemisphere);
   }
   else
   {
     // Process single hemisphere
     Branch initial_hemisphere = (west_or_east == 1) ? Branch(0, PI, PI, 2 * PI) : // West hemisphere
                                     Branch(0, 0, PI, PI);                         // East hemisphere
-    branch_queue.push(initial_hemisphere);
+    q.push(initial_hemisphere);
   }
 
   // Step 5: Main branch-and-bound loop
-  while (!branch_queue.empty())
+  while (!q.empty())
   {
-    Branch current_branch = branch_queue.top();
-    branch_queue.pop();
+    Branch current_branch = q.top();
+    q.pop();
 
     if (current_branch.size() < branch_resolution_)
     {
@@ -76,33 +77,26 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
     for (auto &sb : sub_branches)
     {
       // Calculate bounds for this sub-branch
-      auto [upper_bound, lower_bound, theta_candidates] =
+      auto [ub, lb, theta_candidates] =
           calculateBounds(line_pair_data, sb, ids, kernel_buffer);
 
-      sb.upper_bound = upper_bound;
-      sb.lower_bound = lower_bound;
-      // TODO: check order
+      sb.upper_bound = ub;
+      sb.lower_bound = lb;
       // Update best solution if this sub-branch has better lower bound
-      double previous_best_lower = best_lower_bound;
-      updateBestSolution(sb, theta_candidates, best_lower_bound,
+      pre_best_lb = best_lb;
+      updateBestSolution(sb, theta_candidates, best_lb,
                          u_best, theta_best);
 
       std::cout << "iter: " << ++iteration_count
                 << ", upper: " << sb.upper_bound
                 << ", lower: " << sb.lower_bound
-                << ", best : " << best_lower_bound << std::endl;
+                << ", best : " << best_lb << std::endl;
 
-      // If we found a better lower bound, prune unpromising branches from queue
-      if (best_lower_bound > previous_best_lower)
-      {
-        pruneBranchQueue(branch_queue, best_lower_bound);
-      }
+      if (best_lb > pre_best_lb)
+        pruneBranchQueue(q, best_lb);
 
-      // Add to queue if upper bound is promising (pruning condition)
-      if (upper_bound >= best_lower_bound)
-      {
-        branch_queue.push(sb);
-      }
+      if (ub >= best_lb)
+        q.push(sb);
     }
   }
 
@@ -1496,7 +1490,7 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
 
 void RotFGO::processInitialBranch(Branch &branch, const LinePairData &line_pair_data,
                                   const std::vector<int> &ids, const Eigen::MatrixXd &kernel_buffer,
-                                  double &best_lower_bound, std::vector<Eigen::Vector3d> &best_axes,
+                                  double &best_lb, std::vector<Eigen::Vector3d> &best_axes,
                                   std::vector<double> &best_angles)
 {
   // Calculate bounds for the initial branch
@@ -1506,19 +1500,19 @@ void RotFGO::processInitialBranch(Branch &branch, const LinePairData &line_pair_
   branch.upper_bound = upper_bound;
   branch.lower_bound = lower_bound;
 
-  best_lower_bound = lower_bound;
-  updateBestSolution(branch, theta_candidates, best_lower_bound, best_axes, best_angles);
+  best_lb = lower_bound;
+  updateBestSolution(branch, theta_candidates, best_lb, best_axes, best_angles);
 }
 
 void RotFGO::updateBestSolution(const Branch &branch,
                                 const std::vector<double> &theta_candidates,
-                                double &best_lower_bound,
+                                double &best_lb,
                                 std::vector<Eigen::Vector3d> &best_axes,
                                 std::vector<double> &best_angles)
 {
-  if (branch.lower_bound > best_lower_bound)
+  if (branch.lower_bound > best_lb)
   {
-    best_lower_bound = branch.lower_bound;
+    best_lb = branch.lower_bound;
     best_axes.clear();
     best_angles.clear();
 
@@ -1534,7 +1528,7 @@ void RotFGO::updateBestSolution(const Branch &branch,
       best_angles.push_back(theta);
     }
   }
-  else if (std::abs(branch.lower_bound - best_lower_bound) < 1e-10)
+  else if (std::abs(branch.lower_bound - best_lb) < 1e-10)
   {
     // Found an equally good solution - add to existing candidates
     std::vector<double> clustered_theta = clusterStabber(theta_candidates);
@@ -1551,17 +1545,17 @@ void RotFGO::updateBestSolution(const Branch &branch,
   }
 }
 
-// Transfer only promising branches (where upper_bound >= best_lower_bound)
-void RotFGO::pruneBranchQueue(BranchQueue &branch_queue, double best_lower_bound)
+// Transfer only promising branches (where upper_bound >= best_lb)
+void RotFGO::pruneBranchQueue(BranchQueue &bq, double best_lb)
 {
-  BranchQueue pruned_queue;
-  while (!branch_queue.empty())
+  BranchQueue promising;
+  while (!bq.empty())
   {
-    Branch branch = branch_queue.top();
-    branch_queue.pop();
-    if (branch.upper_bound < best_lower_bound)
+    Branch branch = bq.top();
+    bq.pop();
+    if (branch.upper_bound < best_lb)
       break;
-    pruned_queue.push(branch);
+    promising.push(branch);
   }
-  branch_queue = std::move(pruned_queue);
+  bq = std::move(promising);
 }

@@ -7,6 +7,8 @@
 #include <vector>
 #include <queue>
 
+// Configuration structure for RotFGO parameters
+
 struct LinePairData
 {
   std::vector<Eigen::Vector3d> vector_n;
@@ -47,7 +49,8 @@ struct Branch
         upper_bound(u_bound), lower_bound(l_bound) {}
 
   // Get the size of the branch (for tie-breaking)
-  double size() const
+  // Inline and constexpr for better performance
+  constexpr double size() const noexcept
   {
     return alpha_max - alpha_min;
   }
@@ -58,29 +61,26 @@ struct Branch
     // Compute midpoints for alpha and phi
     double alpha_mid = 0.5 * (alpha_min + alpha_max);
     double phi_mid = 0.5 * (phi_min + phi_max);
-
-    std::vector<Branch> sub_branches;
-    sub_branches.emplace_back(alpha_mid, phi_mid, alpha_max, phi_max); // upper-right
-    sub_branches.emplace_back(alpha_min, phi_mid, alpha_mid, phi_max); // upper-left
-    sub_branches.emplace_back(alpha_mid, phi_min, alpha_max, phi_mid); // lower-right
-    sub_branches.emplace_back(alpha_min, phi_min, alpha_mid, phi_mid); // lower-left
-
-    return sub_branches;
+    return {
+        {alpha_mid, phi_mid, alpha_max, phi_max}, // upper-right
+        {alpha_min, phi_mid, alpha_mid, phi_max}, // upper-left
+        {alpha_mid, phi_min, alpha_max, phi_mid}, // lower-right
+        {alpha_min, phi_min, alpha_mid, phi_mid}  // lower-left
+    };
   }
 
   // Embedded comparator for priority queue
   // Prioritize by upper_bound (descending), then by size (descending)
   struct Comparator
   {
-    bool operator()(const Branch &a, const Branch &b) const
+    inline bool operator()(const Branch &a, const Branch &b) const noexcept
     {
-      if (std::abs(a.upper_bound - b.upper_bound) < 1e-10)
+      const double diff = a.upper_bound - b.upper_bound;
+      if (std::abs(diff) < 1e-10)
       {
-        // If upper bounds are equal, prioritize larger branch size
-        return a.size() < b.size();
+        return a.size() < b.size(); // Prioritize larger branch size
       }
-      // Prioritize higher upper bound
-      return a.upper_bound < b.upper_bound;
+      return diff < 0; // Prioritize higher upper bound
     }
   };
 };
@@ -90,12 +90,50 @@ class RotFGO
 
 public:
   using BranchQueue = std::priority_queue<Branch, std::vector<Branch>, Branch::Comparator>;
+  struct RotFGOConfig
+  {
+    double branch_resolution;
+    double epsilon_r;
+    double sample_resolution;
+    double prox_threshold;
+    bool use_saturated;
+    int init_branch_flag; // 0 for east only, 1 for west only, 2 for both
 
+    RotFGOConfig(double branch_res, double eps, double sample_res, double prox_thresh,
+                 bool saturated = true, int init_branch = 0)
+        : branch_resolution(branch_res), epsilon_r(eps), sample_resolution(sample_res),
+          prox_threshold(prox_thresh), use_saturated(saturated), init_branch_flag(init_branch) {}
+  };
+
+  struct SolverStats
+  {
+    int total_iterations = 0;
+    int branches_processed = 0;
+    int branches_pruned = 0;
+    double bound_calculation_time = 0.0;
+    double pruning_time = 0.0;
+    double total_time = 0.0;
+
+    void reset()
+    {
+      total_iterations = branches_processed = branches_pruned = 0;
+      bound_calculation_time = pruning_time = total_time = 0.0;
+    }
+  };
+
+  // Constructor using configuration struct
+  RotFGO(const RotFGOConfig &config)
+      : branch_resolution_(config.branch_resolution), epsilon_r_(config.epsilon_r),
+        sample_resolution_(config.sample_resolution), prox_threshold_(config.prox_threshold),
+        use_saturated_(config.use_saturated), init_branch_flag_(config.init_branch_flag) {}
+
+  // Legacy constructor for backward compatibility
   RotFGO(double branch_resolution, double epsilon_r,
          double sample_resolution, double prox_threshold, bool use_saturated = true)
       : branch_resolution_(branch_resolution), epsilon_r_(epsilon_r),
         sample_resolution_(sample_resolution), prox_threshold_(prox_threshold),
-        use_saturated_(use_saturated) {}
+        use_saturated_(use_saturated), init_branch_flag_(true) {}
+
   ~RotFGO() {}
 
   // Main solving function
@@ -171,6 +209,7 @@ private:
   double sample_resolution_;
   double prox_threshold_;
   bool use_saturated_;
+  int init_branch_flag_;
 };
 
 #endif // ROTFGO_H
