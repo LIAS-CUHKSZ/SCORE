@@ -35,16 +35,23 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   {
     // all space
     Branch east_hemisphere(0, 0, PI, PI);
+    Branch west_hemisphere(0, PI, PI, 2 * PI);
 
-    auto [upper_bound, lower_bound, theta_candidates] =
+    auto [ub_east, lb_east, theta_candidates] =
         calculateBounds(line_pair_data, east_hemisphere, ids, kernel_buffer);
+    auto [ub_west, lb_west, theta_candidates_west] =
+        calculateBounds(line_pair_data, west_hemisphere, ids, kernel_buffer);
 
-    east_hemisphere.upper_bound = upper_bound;
-    east_hemisphere.lower_bound = lower_bound;
-    best_lower_bound = lower_bound;
+    east_hemisphere.upper_bound = ub_east;
+    east_hemisphere.lower_bound = lb_east;
     updateBestSolution(east_hemisphere, theta_candidates, best_lower_bound, u_best, theta_best);
+
+    west_hemisphere.upper_bound = ub_west;
+    west_hemisphere.lower_bound = lb_west;
+    updateBestSolution(west_hemisphere, theta_candidates_west, best_lower_bound, u_best, theta_best);
+
     branch_queue.push(east_hemisphere);
-    branch_queue.push(Branch(0, PI, PI, 2 * PI)); // west hemisphere
+    branch_queue.push(west_hemisphere);
   }
   else
   {
@@ -74,7 +81,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
 
       sb.upper_bound = upper_bound;
       sb.lower_bound = lower_bound;
-
+      // TODO: check order
       // Update best solution if this sub-branch has better lower bound
       double previous_best_lower = best_lower_bound;
       updateBestSolution(sb, theta_candidates, best_lower_bound,

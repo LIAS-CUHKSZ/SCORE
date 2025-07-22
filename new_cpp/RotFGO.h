@@ -41,6 +41,10 @@ struct Branch
   Branch(double a_min, double p_min, double a_max, double p_max)
       : alpha_min(a_min), phi_min(p_min), alpha_max(a_max), phi_max(p_max),
         upper_bound(-1), lower_bound(-1) {}
+  Branch(double a_min, double p_min, double a_max, double p_max,
+         double u_bound, double l_bound)
+      : alpha_min(a_min), phi_min(p_min), alpha_max(a_max), phi_max(p_max),
+        upper_bound(u_bound), lower_bound(l_bound) {}
 
   // Get the size of the branch (for tie-breaking)
   double size() const
