@@ -25,7 +25,7 @@ for n = 1:size(t_candidates,2)
     % solve a least squares problem
     A = pert_rot_n_2D(inliers,:);
     b = sum(A.*p_3D(inliers,:),2);
-    t_fine_tuned = pinv(A'*A)*(A'*b);
+    t_fine_tuned = pinv(A'*A)*(A'*b); 
     temp_ = norm(A*t_fine_tuned-b);
     
     % update the best translation

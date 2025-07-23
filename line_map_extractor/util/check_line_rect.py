@@ -14,7 +14,7 @@ def check_line_rect(p1, p2, w, h):
         bool: True if line intersects with rectangle, False otherwise
     
     Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-    Version: 1.0
+     
     License: MIT
     """
     

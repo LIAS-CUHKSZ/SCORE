@@ -14,24 +14,25 @@
 
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
- 
 %%% License: MIT
 %%%%
 
 function [t_best,best_lower,num_candidate,time,upper_record,lower_record] = Sat_TransFGO(pert_rot_n_2D,endpoints_3D,ids,kernel_buff,space_size,branch_reso,epsilon_t,prox_thres)
 verbose_flag=0; %    bool, set true for detailed bnb process info.
-mex_flag=1;     %   bool, set true to use mex code for acceleration.
+mex_flag=1;     %    bool, set true to use mex code for acceleration.
 if mex_flag
-   Bound_fh = @Sat_Bounds_trans_mex;
+   Bound_fh = @Sat_Bounds_trans_mex; % mex_compiled bound function
 else
-   Bound_fh = @Sat_Bounds_trans;
+   Bound_fh = @Sat_Bounds_trans; % original bound function
 end
-% ---------------------------------------------------------------------
+
 % --- 1. Initialization ---
 tic
 % reduce dimension (x) and divide (y,z) into cubes of 1 meters
 ceil_y = ceil(space_size(2)); ceil_z = ceil(space_size(3));
 branch = zeros(6,ceil_y*ceil_z);  % each column: y_min, z_min, y_max, z_max, lower bound, upper bound
+
+% bound the initial cubes with side length 1 meter
 best_lower = -1; t_best=zeros(3,1);
 for i=1:ceil_y
     for j=1:ceil_z
@@ -48,25 +49,36 @@ for i=1:ceil_y
         end
     end
 end
-upper_record=[]; lower_record=[];
-%%% start BnB
+
+% --- 2. BnB Start ---
+best_upper  = max(branch(5,:));
+upper_record=best_upper; lower_record=best_lower; 
 iter=1;
 while true
-    % record bounds history
-    best_upper  = max(branch(5,:));
-    upper_record=[upper_record;best_upper];
-    lower_record=[lower_record;best_lower];
+    % terminating condition 0
+    if best_upper <= best_lower
+        break;
+    end
+
+    % prune branches
+    branch(:,branch(5,:)<best_lower)=[];
+
     % select the next exploring branch according to the upper bounds
     idx_upper   = find(branch(5,:)==best_upper);
     branch_size = branch(3,idx_upper)-branch(1,idx_upper);
-    [~,temp_idx]= max(branch_size); idx_upper=idx_upper(temp_idx);
-    next_branch=branch(1:4,idx_upper); % choose the one with largest upper bound and largest width
+    [~,temp_idx]= max(branch_size); idx_upper=idx_upper(temp_idx); 
+    % choose the one with largest upper bound and largest width
+    next_branch=branch(1:4,idx_upper); 
     branch(:,idx_upper)=[];
-    branch(:,branch(5,:)<best_lower)=[];
+    if isempty(next_branch)
+        next_branch
+    end
+    % terminating condition 1
     if (  (next_branch(3,1) - next_branch(1,1)) < branch_reso )
         break;
     end
-    iter=iter+1;
+
+    % divide and bound the new branches
     new_branch=subBranch(next_branch);
     new_upper = zeros(1,4); new_lower = zeros(1,4); new_t_sample = cell(4,1);
     for i=1:4
@@ -76,6 +88,11 @@ while true
         end
     end
     branch=[branch,[new_branch;new_upper;new_lower]];
+    
+    % update the best lower bound and candidate
+    if max(new_lower)==0
+        continue
+    end
     for i=1:4
         if  new_lower(i)>best_lower
             best_lower=new_lower(i);
@@ -87,17 +104,30 @@ while true
             t_best = clustered_t_sample;
             continue;
         end
-        if new_lower(i)==best_lower && new_lower(i)>=0
+        if new_lower(i)==best_lower
             x_stabber = new_t_sample{i}(1,:); yz_sample = new_t_sample{i}(2:3,1);
             x_cluster = cluster_stabber(x_stabber,prox_thres);
             x_num = length(x_cluster); clustered_t_sample = zeros(3,x_num);
             clustered_t_sample(2:3,:) = repmat(yz_sample,[1,x_num]);
             clustered_t_sample(1,:) = x_cluster;
-            t_best = [t_best, clustered_t_sample];
+            %append the best candiate lists
+            t_best = [t_best, clustered_t_sample]; 
         end
     end
+
+    % record bounds history
+    best_upper  = max(branch(5,:));
+    upper_record=[upper_record;best_upper];
+    lower_record=[lower_record;best_lower];
+
+    % terminating condition 2
+    iter=iter+1;
+    if iter > 500
+        break
+    end
 end
-%%% output
+
+% --- 3. BnB Start ---
 num_candidate=size(t_best,2);
 time=toc;
 end

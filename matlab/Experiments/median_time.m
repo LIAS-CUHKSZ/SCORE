@@ -1,45 +1,62 @@
-%% rot
-dataset_ids = ["689fec23d7","c173f62b15","69e5939669","a1d9da703c"];
+%% rot (gt)
+dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
 time_CM=[];
-time_SCM_power=[];
-time_SCM_exp=[];
-time_SCM_entropy=[];
+time_SCM_trunc=[];
+time_SCM_ML=[];
 for i=1:4
-    file_name="./matlab/Experiments/records/"+dataset_ids(i)+"_rotation_record.mat";
+    file_name="./matlab/Experiments/records/gt_semantics/"+dataset_ids(i)+"_rotation_record.mat";
     rot_ercord = load(file_name);
     time_CM=[time_CM;rot_ercord.Record_CM_FGO.Time];
-    time_SCM_power=[time_SCM_power;rot_ercord.Record_SCM_FGO_power.Time];
-    time_SCM_exp=[time_SCM_exp;rot_ercord.Record_SCM_FGO_exp.Time];
-    time_SCM_entropy=[time_SCM_entropy;rot_ercord.Record_SCM_FGO_entropy.Time];
+    time_SCM_trunc=[time_SCM_trunc;rot_ercord.Record_SCM_trunc.Time];
+    time_SCM_ML=[time_SCM_ML;rot_ercord.Record_SCM_ML_lists{2}.Time];
 end
 fprintf("CM_FGO: %f,%f,%f\n",quantile(time_CM,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_power: %f,%f,%f\n",quantile(time_SCM_power,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_exp: %f,%f,%f\n",quantile(time_SCM_exp,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(time_SCM_entropy,[0.25,0.5,0.75]))
-%% trans
-dataset_ids = ["69e5939669","c173f62b15","689fec23d7","a1d9da703c"];
+fprintf("SCM_FGO_trunc: %f,%f,%f\n",quantile(time_SCM_trunc,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_ML: %f,%f,%f\n",quantile(time_SCM_ML,[0.25,0.5,0.75]))
+%% rot (pred)
+dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
 time_CM=[];
-time_SCM_power=[];
-time_SCM_exp=[];
-time_SCM_entropy=[];
+time_SCM_trunc=[];
+time_SCM_ML=[];
 for i=1:4
-    file_name="./matlab/Experiments/records/"+dataset_ids(i)+"_translation_record.mat";
+    file_name="./matlab/Experiments/records/pred_semantics/"+dataset_ids(i)+"_pred_rotation_record.mat";
     rot_ercord = load(file_name);
-    time_CM=[time_CM;rot_ercord.Record_gt_CM.time];
-    time_SCM_power=[time_SCM_power;rot_ercord.Record_gt_SCM_power.time];
-    time_SCM_exp=[time_SCM_exp;rot_ercord.Record_gt_SCM_exp.time];
-    time_SCM_entropy=[time_SCM_entropy;rot_ercord.Record_gt_SCM_entropy.time];
+    time_CM=[time_CM;rot_ercord.Record_CM_FGO.Time];
+    time_SCM_trunc=[time_SCM_trunc;rot_ercord.Record_SCM_trunc.Time];
+    time_SCM_ML=[time_SCM_ML;rot_ercord.Record_SCM_ML_lists{2}.Time];
 end
 fprintf("CM_FGO: %f,%f,%f\n",quantile(time_CM,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_power: %f,%f,%f\n",quantile(time_SCM_power,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_exp: %f,%f,%f\n",quantile(time_SCM_exp,[0.25,0.5,0.75]))
-fprintf("SCM_FGO_entropy: %f,%f,%f\n",quantile(time_SCM_entropy,[0.25,0.5,0.75]))
-%% whole_pipeline
-dataset_ids = ["69e5939669","c173f62b15","689fec23d7","a1d9da703c"];
-time_SCM_entropy=[];
+fprintf("SCM_FGO_trunc: %f,%f,%f\n",quantile(time_SCM_trunc,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_ML: %f,%f,%f\n",quantile(time_SCM_ML,[0.25,0.5,0.75]))
+
+%% trans(gt)
+dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+time_CM=[];
+time_SCM_trunc=[];
+time_SCM_ML=[];
 for i=1:4
-    file_name="./matlab/Experiments/records/"+dataset_ids(i)+"_full_record.mat";
-    rot_ercord = load(file_name);
-    time_SCM_entropy=[time_SCM_entropy;rot_ercord.Record_est_SCM_entropy.time];
+    file_name="./matlab/Experiments/records/gt_semantics/"+dataset_ids(i)+"_translation_record.mat";
+    trans_ercord = load(file_name);
+    time_CM=[time_CM;trans_ercord.Record_gt_CM.time];
+    time_SCM_trunc=[time_SCM_trunc;trans_ercord.Record_gt_SCM_trunc.time];
+    time_SCM_ML=[time_SCM_ML;trans_ercord.Record_SCM_ML_lists{2}.time];
 end
-fprintf("time_SCM_entropy: %f,%f,%f\n",quantile(time_SCM_entropy,[0.25,0.5,0.75]))
+fprintf("CM_FGO: %f,%f,%f\n",quantile(time_CM,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_trunc: %f,%f,%f\n",quantile(time_SCM_trunc,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_ML: %f,%f,%f\n",quantile(time_SCM_ML,[0.25,0.5,0.75]))
+
+%% trans(pred)
+dataset_ids = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+time_CM=[];
+time_SCM_trunc=[];
+time_SCM_ML=[];
+for i=1:4
+    file_name="./matlab/Experiments/records/pred_semantics/"+dataset_ids(i)+"_pred_translation_record.mat";
+    trans_ercord = load(file_name);
+    time_CM=[time_CM;trans_ercord.Record_gt_CM.time];
+    time_SCM_trunc=[time_SCM_trunc;trans_ercord.Record_gt_SCM_trunc.time];
+    time_SCM_ML=[time_SCM_ML;trans_ercord.Record_SCM_ML_lists{2}.time];
+end
+fprintf("CM_FGO: %f,%f,%f\n",quantile(time_CM,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_trunc: %f,%f,%f\n",quantile(time_SCM_trunc,[0.25,0.5,0.75]))
+fprintf("SCM_FGO_ML: %f,%f,%f\n",quantile(time_SCM_ML,[0.25,0.5,0.75]))

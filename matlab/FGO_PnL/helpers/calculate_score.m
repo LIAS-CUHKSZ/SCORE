@@ -1,3 +1,4 @@
+% calculate score based on inlier ids and kernel function.
 function score=calculate_score(inlier_ids,kernel_buffer)
     score=0;
     unique_ids=unique(inlier_ids);

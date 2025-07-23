@@ -20,124 +20,103 @@
 
 function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres, west_or_east)
 
+% --- 0. settings ---
 mex_flag = 1; %set true to use mex code for acceleration.
-verbose_flag = 0; %set true for detailed bnb process info.
 % choose the function handler according to mex_flag
 if mex_flag
-    Bound_fh = @Sat_Bounds_FGO_mex;
+    UB_fh = @Sat_Rot_U_mex;
+    LB_fh = @Sat_Rot_L_mex;
 else
-    Bound_fh = @Sat_Bounds_FGO;
+    UB_fh = @Sat_Rot_U;
+    LB_fh = @Sat_Rot_L;
 end
 
-% ---------------------------------------------------------------------
+% we use eps to avoid numerical error when comparing two double variable
+eps = min(10^(-8),min(kernel_buff(kernel_buff>0))/2);
+
 % --- 1. preprocess ---
 line_pair_data = data_process(vector_n,vector_v); % pre-process data
 
-% ---------------------------------------------------------------------
+
 % --- 2. Initialize the Acclerated BnB process ---
 tic
-%  initialization
 best_lower = -1; best_upper = -1;
 branch=[];
 upper_record=[]; lower_record=[]; % record bounds history
+west_branch = [0;pi;pi;2*pi]; east_branch = [0;0;pi;pi];
 if west_or_east == 2 % branch over the whole sphere
-    % bound the east semi-sphere first
-    east_branch = [0;0;pi;pi];
-    [upper,lower,theta]=Bound_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
-
-    % optimal rotation axis (corresponding to the branch achieving the best lower bound)
-    u_best=polar_2_xyz(0.5*(east_branch(1)+east_branch(3)) , 0.5*(east_branch(2)+east_branch(4)) );
-
-    % cluster the optimal stabbers returned by saturated interval stabbing
-    theta_best = cluster_stabber(theta,prox_thres);
-    u_best=repmat(u_best,1,length(theta_best));
-
-    % update best lower/upper bound
-    best_lower = lower; best_upper = upper;
-    branch = [east_branch;upper;lower];
-
-    % set the west semi-sphere as the next branch to be branched and bounded
-    next_branch = [0;pi;pi;2*pi];
+    upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
+    upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
+    branch = [west_branch,east_branch;upper_west,upper_east];
 else
     if west_or_east % only branch over the west sphere
-        % set the west semi-sphere as the next branch to be branched and bounded
-        next_branch = [0;pi;pi;2*pi];
+        upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
+        branch = [west_branch;upper_west];
     else % only branch over the east sphere
-        % set the east semi-sphere as the next branch to be branched and bounded
-        next_branch = [0;0;pi;pi];
+        upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
+        branch = [east_branch;upper_east];
     end
 end
 
-% ---------------------------------------------------------------------
 % --- 3. Start the Acclerated BnB process ---
-new_upper=zeros(1,4); new_lower=zeros(1,4); new_theta_lower=cell(1,4);
-while true
-    % divide the branch into four
-    new_branch=subBranch(next_branch); 
-    % obtain lower/upper bound and optimal stabbers for each sub branch
-    for i=1:4
-        [new_upper(i),new_lower(i),new_theta_lower{i}]=Bound_fh(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff,prox_thres);
-        if(verbose_flag)
-            fprintf('Iteration: %d, Branch: [%f, %f, %f, %f], Upper: %f, Lower: %f\n', iter, new_branch(:,i), new_upper(i), new_lower(i));
-        end
+best_branch = [];
+iter = 1;
+while ~isempty(branch)
+    % pop out the branch with highest upper bound
+    [best_upper,max_idx] = max(branch(5,:));
+    popped_branch = branch(:,max_idx);
+    branch(:,max_idx)=[];
+    [lower_bound,~] = LB_fh(line_pair_data,popped_branch(1:4),epsilon_r,ids,kernel_buff,prox_thres);
+
+    % update best lower bound and optimal theta
+    if lower_bound>best_lower+eps  % lower_bound>best_lower
+       best_lower = lower_bound;
+       best_branch = popped_branch(1:4);
+       
+    elseif lower_bound+eps > best_lower % lower_bound == best_lower
+       best_branch = [best_branch,popped_branch(1:4)]; %append the list
+
+    else
+        
     end
-    branch=[branch,[new_branch;new_upper;new_lower]];
-
-    % update the best lower bound and the optimal rotation candidates
-    sub_max_lower = max(new_lower);
-    idx_sub_best = find(new_lower==sub_max_lower);
-    for i=1:length(idx_sub_best)
-        j = idx_sub_best(i);
-        if  sub_max_lower>best_lower
-            best_lower=sub_max_lower;
-            % cluster the optimal stabbers returned by saturated interval stabbing
-            theta_best = cluster_stabber(new_theta_lower{j},prox_thres);
-
-            % update best rotation axis
-            u_best=polar_2_xyz(0.5*(new_branch(1,j)+new_branch(3,j)) , 0.5*(new_branch(2,j)+new_branch(4,j)) );
-            u_best=repmat(u_best,1,length(theta_best));
-
-        elseif sub_max_lower==best_lower
-            % cluster the optimal stabbers returned by saturated interval stabbing
-            new_best_theta = cluster_stabber(new_theta_lower{j},prox_thres);
-
-            % append the buffer storing optimal rotation axis(u_best) and angle(theta_best) 
-            u_new=polar_2_xyz(0.5*(new_branch(1,j)+new_branch(3,j)),0.5*(new_branch(2,j)+new_branch(4,j)));
-            u_best = [u_best,repmat(u_new,[1,length(new_best_theta)])];
-            theta_best = [theta_best,new_best_theta];
-            
-        else
-            contiune;
-        end
-    end
-    branch(:,branch(5,:)<best_lower)=[]; % prune branches
-
-    % update the best upper bound and determine the next branch
-    best_upper = max(branch(5,:));
-    % choose the branch with best upper bound and largest size
-    idx_upper = find(branch(5,:)==best_upper); % find branches achieving the best upper bound
-    branch_size=branch(3,idx_upper)-branch(1,idx_upper); 
-    [~,temp_idx]=max(branch_size);
-    idx_upper=idx_upper(temp_idx); % choose the one with largest size
-    next_branch=branch(1:4,idx_upper);
-    branch(:,idx_upper)=[];
-   
-    % stop condition
-    if (  (next_branch(3,1) - next_branch(1,1)) < branch_reso )
-        break;
-    end
-
+    
     % record the history of best lower/upper bounds
     lower_record=[lower_record;best_lower];
     upper_record=[upper_record;best_upper];
+    iter = iter+1;
+
+    % prune branches according to the updated lower bound
+    branch(:,(branch(5,:)+eps)<best_lower)=[]; 
+    
+    if popped_branch(3,:)-popped_branch(1,:)<branch_reso
+        continue;
+    end
+
+    if (best_upper < best_lower + eps) && (lower_bound+eps > best_lower) % terminate further branching
+       % best_upper == best_lower && lower_bound == best_lower
+       continue;
+    else % divide the branch into four
+        new_branch=subBranch(popped_branch(1:4)); 
+        % evaluate the upper bounds for each sub branch
+        for i = 1:4
+            new_upper = UB_fh(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff);
+            branch=[branch,[new_branch(:,i);new_upper]];
+        end
+    end
 end
 
-% ---------------------------------------------------------------------
 % --- 4. Output ---
 time=toc;
-num_candidate=size(u_best,2);
 R_opt=[];
-for i=1:num_candidate
-    R_opt = [R_opt;rotvec2mat3d(u_best(:,i)*theta_best(i))];
+num_candidate=0;
+for i = 1 : size(best_branch,2)
+    this_branch = best_branch(:,i);
+    this_u      = polar_2_xyz(0.5*(this_branch(1)+this_branch(3)) , 0.5*(this_branch(2)+this_branch(4)));
+    [~,theta_opt] = LB_fh(line_pair_data,this_branch,epsilon_r,ids,kernel_buff,prox_thres);
+    theta_opt = cluster_stabber(theta_opt,prox_thres);
+    for j = 1:length(theta_opt)
+        R_opt=[R_opt;rotvec2mat3d(this_u*theta_opt(j))];
+    end
+    num_candidate = num_candidate + length(theta_opt);
 end
 end
