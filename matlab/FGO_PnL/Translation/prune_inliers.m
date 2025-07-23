@@ -1,13 +1,17 @@
+% prune 3D lines behind the camera and outside image under (R_,t_)
 function real_inliers = prune_inliers(R_,intrinsic,inliers,endpoints_3D,t_)
-        %%% we filter 3D lines behind the camera and outside image under (R_,t_)
+        % initialize buffer for lines to be deleted
         delete = [];
         for k=1:length(inliers)
+            % prune lines behind the camera
             end_point_1 = R_'*(endpoints_3D(inliers(k)*2-1,:)'-t_);
             end_point_2 = R_'*(endpoints_3D(inliers(k)*2,:)'-t_);
-            if end_point_1(3) < 0 && end_point_2(3)<0 %% filter out the lines behind the camera
+            if end_point_1(3) < 0 && end_point_2(3)<0 
                 delete=[delete,k];
                 continue
             end
+
+            % prune lines not intersecting the image
             end_point_1_pixel = intrinsic*end_point_1;
             end_point_1_pixel = end_point_1_pixel(1:2)/end_point_1_pixel(3);
             end_point_2_pixel = intrinsic*end_point_2;
@@ -17,6 +21,8 @@ function real_inliers = prune_inliers(R_,intrinsic,inliers,endpoints_3D,t_)
                 delete=[delete,k];
             end
         end
+
+        % output
         real_inliers = inliers;
         if ~isempty(delete)
             real_inliers(delete)=[];

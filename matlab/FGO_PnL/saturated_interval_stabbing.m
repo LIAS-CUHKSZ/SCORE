@@ -21,7 +21,7 @@ masks = repmat([0;1], L, 1);
 [~, sidx] = sort(Intervals);
 
 % initialize the buffer to store optimal stabbers
-stabber = zeros(1,10000); count_valid_stabber = 0;
+stabber = zeros(1,100000); count_valid_stabber = 0; 
 
 % initialize buffer counting stabbed intervals for each 2D lines
 count_buffer=zeros(max(ids),1);
@@ -42,9 +42,9 @@ for i = 1:length_sidx-1
             new_stabber = [Intervals(sidx(i)):prox_thres:Intervals(sidx(i+1)),Intervals(sidx(i+1))];
             num_new = length(new_stabber);
             if score > best_score
+                stabber(1:num_new) = new_stabber;
                 % instead of clearing the buffer
                 % I record the number of optimal stabbers
-                stabber(1:num_new) = new_stabber;
                 count_valid_stabber = num_new;
             else
                 stabber(count_valid_stabber+1:count_valid_stabber+num_new) = new_stabber;

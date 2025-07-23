@@ -5,16 +5,15 @@
 % remeber to set variables 'mex_flag=0' in functions Sat_RotFGO and Sat_TransFGO
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
-%%% Version: 2.0
 %%% License: MIT
 
 clear
 clc
-scene_idx = 2;
+scene_idx = 1;
 pred_flag = 1;
 %
-room_sizes =  [8,    6, 4;
-               7,   7, 3;  
+room_sizes =  [ 8,    6, 4;
+                 7,   7, 3;  
               10.5, 5, 3.5; 
               10.5, 6, 3.0];
 dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
@@ -22,8 +21,10 @@ dataset_name = dataset_names(scene_idx);
 space_size =  room_sizes(scene_idx,:);
 if pred_flag
     data_folder="csv_dataset/"+dataset_name+"_pred/";
+    remapping = load(data_folder+"remapping.txt");
 else
-    data_folder="csv_dataset/"+dataset_name;
+    data_folder="csv_dataset/"+dataset_name+"/";
+    remapping=[];
 end
 lines3D=readmatrix(data_folder+"/3Dlines.csv"); 
 %%% rot params
@@ -31,10 +32,14 @@ prox_thres_r = 1*pi/180; % for clustering proximate stabbers
 branch_reso_r = pi/256; % terminate bnb when branch size < branch_reso
 sample_reso_r = pi/256; % resolution for interval analysis
 epsilon_r = 0.015;
+q_rot = [0.7,0.6,0.6,0.9];
+L_rot = q_rot(scene_idx)/(1-q_rot(scene_idx))/epsilon_r;
 %%% trans params
 branch_reso_t = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres_t  = 0.01; %
 epsilon_t = 0.03;
+q_trans = 0.8;
+L_trans = q_trans/(1-q_trans)/epsilon_t;
 %%% statistics
 column_names=["Image Id","# 2D lines","Outlier Ratio","IR Err Rot","IR Err Trans", "Rot Err","Trans Err", "time"];
 columnTypes = ["int32"  ,"int32"     ,"double"       ,"double"    ,"double",       "double" ,"double"   ,"double"];
@@ -51,6 +56,12 @@ parfor num =0:total_img
     K_p=readmatrix(data_folder+"intrinsics/frame_"+frame_id+".csv");
     T_gt = readmatrix(data_folder+"poses/frame_"+frame_id+".csv");
     R_gt = T_gt(1:3,1:3); t_gt=T_gt(1:3,4);
+    intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
+    % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1) 
+    lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv"); 
+    lines2D(lines2D(:,4)==0,:)=[]; %delete lines without a semantic label
+    lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
+    %
     retrived_3D_line_idx = readmatrix(data_folder+"retrived_3D_line_idx/frame_"+frame_id+".csv")+1; % retrived sub-map
     retrived_closest_pose = readmatrix(data_folder+"retrived_closest_pose/frame_"+frame_id+".csv");
     [alpha,phi,theta] = rot2angle(retrived_closest_pose(1:3,1:3)');
@@ -66,14 +77,10 @@ parfor num =0:total_img
            west_east_flag = 0;
         end
     end
-    intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
-    % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1) 
-    lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv"); 
-    lines2D(lines2D(:,4)==0,:)=[]; %delete lines without a semantic label
-    lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
+    lines3D_sub = lines3D(retrived_3D_line_idx,:);
+    [lines2D,lines3D_sub]=remap_semantic_id(lines2D,lines3D_sub,remapping);
     % ---------------------------------------------------------------------
     % --- 2. semantic matching and outlier ratio ---
-    lines3D_sub = lines3D(retrived_3D_line_idx,:);
     [ids,n_2D,v_3D,endpoints_3D]=match_line(lines2D,lines3D_sub);  % match with clustered 3D lines
     % skip image with too few 2D lines
     if length(unique(ids)) < 5
@@ -89,30 +96,30 @@ parfor num =0:total_img
     else
        outlier_ratio = 1-length(with_match_ids)/total_match_num;
     end
-    % --- 3. saturation function design ---
+
+    %-------------------------------------------------------------
+    %---- 3. complete pipeline starts here -----
+    fprintf(num2str(img_idx)+"\n")
+    time_all = 0; 
+    %%%%%%%%%%%% rotation estimation %%%%%%%%%%%% 
+    % saturation function design
     num_2D_lines = size(lines2D,1);
     match_count = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
-    L = sum(log(match_count(match_count>0)));  % a sufficiently large number
     rot_kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
         if match_count(i)==0
             continue
         end
-        rot_kernel_buff_SCM_entropy(i,1)=1-log(match_count(i))/L;
+        rot_kernel_buff_SCM_entropy(i,1) =  log(1+L_rot/match_count(i));
         for j = 2:match_count(i)
-            rot_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
+            rot_kernel_buff_SCM_entropy(i,j) = log(1+L_rot*j/match_count(i))-log(1+L_rot*(j-1)/match_count(i));
         end
     end
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
-
-    %-------------------------------------------------------------
-    %---- 4. complete pipeline starts here -----
-    fprintf(num2str(img_idx)+"\n")
-    time_all = 0; 
     [R_opt_top,best_score,num_candidate_rot,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,rot_kernel_buff_SCM_entropy,...
         branch_reso_r,epsilon_r,sample_reso_r,prox_thres_r,west_east_flag);
@@ -140,9 +147,9 @@ parfor num =0:total_img
             if match_count_pruned(i)==0
                 continue
             end
-            trans_kernel_buff_SCM_entropy(i,1)=1-log(match_count_pruned(i))/LL;
+            trans_kernel_buff_SCM_entropy(i,1)=log(1+L_trans/match_count(i));
             for j = 2:match_count_pruned(i)
-                trans_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/LL;
+                trans_kernel_buff_SCM_entropy(i,j)=log(1+L_trans*j/match_count(i))-log(1+L_trans*(j-1)/match_count(i));
             end
         end
         %%% Sat-CM: entropy + geo 

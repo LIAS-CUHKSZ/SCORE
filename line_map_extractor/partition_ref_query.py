@@ -4,7 +4,7 @@ import glob
 if __name__ == "__main__":
     data_root_dir = "/data2/scannetppv2/"
     output_root_dir = "/data1/home/lucky/IROS25/SCORE/"
-    scene_list = ["69e5939669","689fec23d7","c173f62b15","a1d9da703c"]
+    scene_list = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"]
     for scene_id in scene_list:
         colmap_image_file = os.path.join(data_root_dir, f"data/{scene_id}/iphone/colmap/images.txt")
         colmap_image_list = []
