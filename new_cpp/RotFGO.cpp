@@ -94,7 +94,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
       if (best_lb > pre_best_lb)
         pruneBranchQueue(q, best_lb);
 
-      if (sub_branches[i].upper_bound >= best_lb)
+      if (sub_branches[i].upper_bound >= best_lb + 1e-10)
         q.push(sub_branches[i]);
     }
   }
@@ -1471,7 +1471,7 @@ void RotFGO::pruneBranchQueue(BranchQueue &bq, double best_lb)
   while (!bq.empty())
   {
     const Branch &branch = bq.top();
-    if (branch.upper_bound < best_lb)
+    if (branch.upper_bound + 1e-10 < best_lb)
       break;
     promising.push(std::move(const_cast<Branch &>(branch)));
     bq.pop();
