@@ -35,6 +35,8 @@ lines3D=readmatrix(data_folder+"/3Dlines.csv");
 rot_data = load(rot_data_path);
 record_rot_SCM_ML = rot_data.Record_SCM_ML_lists{rot_k_idx};
 epsilon_r = 0.015;
+q_rot = [0.7,0.6,0.6,0.9];
+L_rot = q_rot(scene_idx)/(1-q_rot(scene_idx))/epsilon_r;
 %%% trans params
 branch_reso_t = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres_t  = 0.01; %

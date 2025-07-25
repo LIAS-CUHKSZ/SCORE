@@ -3,6 +3,8 @@
 % Saturated Consensus Maximization vs Consensus Maximization
 % --- Note!! ---
 % If you don't want to or can't use the compiled mex functions,
+% --- Note!! ---
+% If you don't want to or can't use the compiled mex functions,
 % remeber to set variables 'mex_flag=0' in function Sat_RotFGO
 
 %%% Author:  Haodong Jiang <221049033@link.cuhk.edu.cn>
@@ -15,8 +17,11 @@ dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
 dataset_name = dataset_names(scene_idx);
 
 % load semantic remapping 
+
+% load semantic remapping 
 if pred_flag
     data_folder="csv_dataset/"+dataset_name+"_pred/";
+    remapping = load(data_folder+"remapping.txt");
     remapping = load(data_folder+"remapping.txt");
 else
     data_folder="csv_dataset/"+dataset_name+"/";
@@ -46,10 +51,14 @@ parfor num = 1:total_img
     % ---------------------------------------------------------------------
     % --- 1. load data ---
     img_idx=num*10;
+    img_idx=num*10;
     frame_id = sprintf("%06d",img_idx);
+    if ~exist(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv",'file')    
     if ~exist(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv",'file')    
         continue
     end
+
+    % load 2D data
 
     % load 2D data
     K_p=readmatrix(data_folder+"intrinsics/frame_"+frame_id+".csv");
@@ -62,20 +71,33 @@ parfor num = 1:total_img
     lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
     
     % load image retrivel results and prune search space
+    intrinsic=[K_p(1),0,K_p(2);0,K_p(3),K_p(4);0,0,1]; % intrinsic matrix
+    % lines2D(Nx11): normal vector(3x1), semantic label(1), endpoint a(u,v), endpoint b(u,v), matching 3d line idx(1), rot_err(1), trans_err(1)
+    lines2D = readmatrix(data_folder+"lines2D/frame_"+frame_id+"_2Dlines.csv");
+    lines2D(lines2D(:,4)==0,:)=[]; % delete lines without semantic label
+    lines2D(:,1:3)=lines2D(:,1:3)*intrinsic; lines2D(:,1:3)=lines2D(:,1:3)./vecnorm(lines2D(:,1:3)')';
+    
+    % load image retrivel results and prune search space
     retrived_3D_line_idx = readmatrix(data_folder+"retrived_3D_line_idx/frame_"+frame_id+".csv")+1; % retrived sub-map
     lines3D_sub = lines3D(retrived_3D_line_idx,:);
     retrived_closest_pose = readmatrix(data_folder+"retrived_closest_pose/frame_"+frame_id+".csv"); % pose of the most similar retrived image
+    lines3D_sub = lines3D(retrived_3D_line_idx,:);
+    retrived_closest_pose = readmatrix(data_folder+"retrived_closest_pose/frame_"+frame_id+".csv"); % pose of the most similar retrived image
     retrived_err_rot = angular_distance(retrived_closest_pose(1:3,1:3),R_gt);
+    [alpha,phi,theta] = rot2angle(retrived_closest_pose(1:3,1:3)');
     [alpha,phi,theta] = rot2angle(retrived_closest_pose(1:3,1:3)');
     if abs(phi) < 3*pi/180    % ambiguous case
         west_east_flag = 2;
     else
         if phi<0
             west_east_flag = 1;
+            west_east_flag = 1;
         else
+            west_east_flag = 0;
             west_east_flag = 0;
         end
     end
+
 
     % ---------------------------------------------------------------------
     % --- 2. semantic matching and calculate outlier ratio ---
@@ -83,7 +105,14 @@ parfor num = 1:total_img
     [ids,n_2D,v_3D,~]=match_line(lines2D,lines3D_sub);
 
     % skip image with too few matched 2D lines due to observability issue
+    % --- 2. semantic matching and calculate outlier ratio ---
+    [lines2D,lines3D_sub]=remap_semantic_id(lines2D,lines3D_sub,remapping);
+    [ids,n_2D,v_3D,~]=match_line(lines2D,lines3D_sub);
+
+    % skip image with too few matched 2D lines due to observability issue
     if length(unique(ids)) < 5
+        fprintf("image "+num2str(img_idx)+" has less than 5 lines, skip.\n");
+        continue
         fprintf("image "+num2str(img_idx)+" has less than 5 lines, skip.\n");
         continue
     end
@@ -93,7 +122,11 @@ parfor num = 1:total_img
         predicted_semantics = lines2D(with_match_ids,4);
         true_semantics = lines3D(lines2D(with_match_ids,9),7);
         outlier_ratio = 1-nnz(predicted_semantics==true_semantics)/total_match_num;
+        predicted_semantics = lines2D(with_match_ids,4);
+        true_semantics = lines3D(lines2D(with_match_ids,9),7);
+        outlier_ratio = 1-nnz(predicted_semantics==true_semantics)/total_match_num;
     else
+        outlier_ratio = 1-length(with_match_ids)/total_match_num;
         outlier_ratio = 1-length(with_match_ids)/total_match_num;
     end
 
@@ -113,10 +146,24 @@ parfor num = 1:total_img
     for k = 1:num_q
         kernel_buff_SCM_ML_lists{k} = zeros(num_2D_lines,max(match_count));
     end
+    kernel_buff_CM = ones(num_2D_lines,max(match_count));
+    kernel_buff_SCM_trunc = zeros(num_2D_lines,max(match_count));
+    kernel_buff_SCM_trunc(:,1)=1;
+    kernel_buff_SCM_power = zeros(num_2D_lines,max(match_count));
+    % likelihood-based saturation functions with different parameter choice
+    kernel_buff_SCM_ML_lists = cell(num_q,1);
+    for k = 1:num_q
+        kernel_buff_SCM_ML_lists{k} = zeros(num_2D_lines,max(match_count));
+    end
     for i = 1:num_2D_lines
         if match_count(i)==0
             continue
         end
+        for j =1:match_count(i)
+            kernel_buff_SCM_power(i,j)=j^(-8);
+            for k = 1:num_q
+                kernel_buff_SCM_ML_lists{k}(i,j) = log(1+L_list(k)*j/match_count(i))-log(1+L_list(k)*(j-1)/match_count(i));
+            end
         for j =1:match_count(i)
             kernel_buff_SCM_power(i,j)=j^(-8);
             for k = 1:num_q
@@ -127,7 +174,9 @@ parfor num = 1:total_img
 
     % ---------------------------------------------------------------------
     % --- 4. rotation estimation starts here ---
+    % --- 4. rotation estimation starts here ---
     fprintf(num2str(img_idx)+"\n")
+    % find inliers under ground truth rotation
     % find inliers under ground truth rotation
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
@@ -183,7 +232,9 @@ end
 % save data
 if pred_flag
     output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record.mat";
+    output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record.mat";
 else
+    output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record.mat";
     output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record.mat";
 end
 save(output_filename);
@@ -212,6 +263,7 @@ end
 
 fprintf("============ max rot err statistics ============\n")
 fprintf("Image Retriveal:%f,%f,%f\n",quantile(Record_CM_FGO.("IR Err Rot"),[0.25,0.5,0.75]))
+fprintf("Image Retriveal:%f,%f,%f\n",quantile(Record_CM_FGO.("IR Err Rot"),[0.25,0.5,0.75]))
 fprintf("CM_FGO: %f,%f,%f\n",quantile(Record_CM_FGO.("Max Rot Err"),[0.25,0.5,0.75]))
 fprintf("SCM_FGO(trunc): %f,%f,%f\n",quantile(Record_SCM_trunc.("Max Rot Err"),[0.25,0.5,0.75]))
 for k = 1:num_q
@@ -219,6 +271,7 @@ for k = 1:num_q
 end
 %
 fprintf("============ Recall at 3/5/10 degrees============\n")
+fprintf("Image Retriveal: %f,%f,%f\n",sum(Record_CM_FGO.("IR Err Rot")<[3,5,10])/num_valid_images*100)
 fprintf("Image Retriveal: %f,%f,%f\n",sum(Record_CM_FGO.("IR Err Rot")<[3,5,10])/num_valid_images*100)
 fprintf("CM_FGO: %f,%f,%f\n",sum(Record_CM_FGO.("Max Rot Err")<[3,5,10])/num_valid_images*100)
 fprintf("SCM_FGO(trunc): %f,%f,%f\n",sum(Record_SCM_trunc.("Max Rot Err")<[3,5,10])/num_valid_images*100)

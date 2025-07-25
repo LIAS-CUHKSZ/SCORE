@@ -101,6 +101,17 @@ while ~isempty(branch)
             branch=[branch,[new_branch(:,i);new_upper]];
         end
     end
+
+    % record bounds history
+    best_upper  = max(branch(5,:));
+    upper_record=[upper_record;best_upper];
+    lower_record=[lower_record;best_lower];
+
+    % terminating condition 2
+    iter=iter+1;
+    if iter > 500
+        break
+    end
 end
 
 % --- 3. Output ---
