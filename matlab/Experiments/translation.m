@@ -11,7 +11,7 @@
 clear
 clc
 scene_idx = 4; % choose 1 scene 
-pred_flag = 1; % set 1 if use predicted semantic label
+pred_flag = 0; % set 1 if use predicted semantic label
 dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
 dataset_name = dataset_names(scene_idx);
 room_sizes =  [8,    6, 4;
@@ -184,7 +184,7 @@ if pred_flag
 else
     output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_translation_record.mat";
 end
-save(output_filename);
+% save(output_filename);
 %% print statistics
 num_valid_images = height(Record_gt_CM);
 fprintf("============ statistics ============\n")

@@ -40,7 +40,8 @@ line_pair_data = data_process(vector_n,vector_v); % pre-process data
 
 % --- 2. Initialize the Acclerated BnB process ---
 tic
-best_lower = -1; best_upper = -1;
+best_lower = -1; 
+best_upper = -1;
 branch=[];
 upper_record=[]; lower_record=[]; % record bounds history
 west_branch = [0;pi;pi;2*pi]; east_branch = [0;0;pi;pi];
@@ -89,8 +90,12 @@ while ~isempty(branch)
     branch(:,(branch(5,:)+eps)<best_lower)=[]; 
     
     % terminate further branching if reaching resolution
-    if popped_branch(3,:)-popped_branch(1,:)<branch_reso 
+    if popped_branch(3)-popped_branch(1)<branch_reso 
         continue;
+    end
+    % terminate further branching if reach maximum iteration
+    if iter > 1000
+       continue;
     end
 
     % terminate further branching if 
@@ -118,7 +123,8 @@ for i = 1 : size(best_branch,2)
     [~,theta_opt] = LB_fh(line_pair_data,this_branch,epsilon_r,ids,kernel_buff,prox_thres);
     theta_opt = cluster_stabber(theta_opt,prox_thres);
     for j = 1:length(theta_opt)
-        R_opt=[R_opt;rotvec2mat3d(this_u*theta_opt(j))];
+        append_R = rotvec2mat3d(this_u*theta_opt(j));
+        R_opt=[R_opt;append_R'];
     end
     num_candidate = num_candidate + length(theta_opt);
 end
