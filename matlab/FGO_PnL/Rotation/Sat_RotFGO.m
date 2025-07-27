@@ -10,15 +10,14 @@
 % epsilon_r:        scalar, error tolerance.
 % sample_reso:      scalar, control resolution for interval analysis.
 % prox_thres:       double, the candidates are not proximate to each other.
-% west_or_east:     =0 only branch over the west sphere
-%                   =1 only branch over the east sphere
-%                   =2 branch over the whole sphere
+% initial_branch:   M x 4, searched space pruned with prior knowledge
+%                   each column [alpha_l;phi_l;alpha_u;phi_u];
 
 %%% Author: Haodong Jiang <221049033@link.cuhk.edu.cn>
 %%% License: MIT
 %%%%
 
-function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres, west_or_east)
+function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres, initial_branch)
 
 % --- 0. settings ---
 % --- 0. settings ---
@@ -39,13 +38,8 @@ end
 % we use eps to avoid numerical error when comparing two double variable
 eps = min(10^(-8),min(kernel_buff(kernel_buff>0))/2);
 
-% we use eps to avoid numerical error when comparing two double variable
-eps = min(10^(-8),min(kernel_buff(kernel_buff>0))/2);
-
 % --- 1. preprocess ---
 line_pair_data = data_process(vector_n,vector_v); % pre-process data
-
-
 
 % --- 2. Initialize the Acclerated BnB process ---
 tic
@@ -53,49 +47,11 @@ best_lower = -1;
 best_upper = -1;
 branch=[];
 upper_record=[]; lower_record=[]; % record bounds history
-west_branch = [0;pi;pi;2*pi]; east_branch = [0;0;pi;pi];
-west_branch = [0;pi;pi;2*pi]; east_branch = [0;0;pi;pi];
-if west_or_east == 2 % branch over the whole sphere
-    upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
-    upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
-    branch = [west_branch,east_branch;upper_west,upper_east];
-    upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
-    upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
-    branch = [west_branch,east_branch;upper_west,upper_east];
-else
-    if west_or_east % only branch over the west sphere
-        upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
-        branch = [west_branch;upper_west];
-        upper_west = UB_fh(line_pair_data,west_branch,epsilon_r,sample_reso,ids,kernel_buff);
-        branch = [west_branch;upper_west];
-    else % only branch over the east sphere
-        upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
-        branch = [east_branch;upper_east];
-        upper_east = UB_fh(line_pair_data,east_branch,epsilon_r,sample_reso,ids,kernel_buff);
-        branch = [east_branch;upper_east];
-    end
+for i = 1 : size(initial_branch,2)
+    upper_ = UB_fh(line_pair_data,initial_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff);
+    branch = [branch,[initial_branch(:,i);upper_]];
 end
-
 % --- 3. Start the Acclerated BnB process ---
-best_branch = [];
-iter = 1;
-while ~isempty(branch)
-    % pop out the branch with highest upper bound
-    [best_upper,max_idx] = max(branch(5,:));
-    popped_branch = branch(:,max_idx);
-    branch(:,max_idx)=[];
-    [lower_bound,~] = LB_fh(line_pair_data,popped_branch(1:4),epsilon_r,ids,kernel_buff,prox_thres);
-
-    % update best lower bound and optimal theta
-    if lower_bound>best_lower+eps  % lower_bound>best_lower
-       best_lower = lower_bound;
-       best_branch = popped_branch(1:4);
-       
-    elseif lower_bound+eps > best_lower % lower_bound == best_lower
-       best_branch = [best_branch,popped_branch(1:4)]; %append the list
-
-    else
-        
 best_branch = [];
 iter = 1;
 while ~isempty(branch)

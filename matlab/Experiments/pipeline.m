@@ -9,9 +9,10 @@
 
 clear
 clc
-scene_idx = 1;
-pred_flag = 0;
-%
+scene_idx = 4;
+pred_flag = 1;
+two_or_eight = 0; % set 1 if divided into west or east
+                  % set 0 if divided into eight
 room_sizes =  [ 8,    6, 4;
     7,   7, 3;
     10.5, 5, 3.5;
@@ -21,12 +22,20 @@ dataset_name = dataset_names(scene_idx);
 space_size =  room_sizes(scene_idx,:);
 if pred_flag
     data_folder="csv_dataset/"+dataset_name+"_pred/";
-    rot_data_path = "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record.mat";
+    if two_or_eight
+        rot_data_path = "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_2.mat";
+    else
+        rot_data_path = "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_8.mat";
+    end
     remapping = load(data_folder+"remapping.txt");
     rot_k_idx = 2;
 else
     data_folder="csv_dataset/"+dataset_name+"/";
-    rot_data_path = "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record.mat";
+    if two_or_eight
+        rot_data_path = "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_2.mat";
+    else
+        rot_data_path = "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_8.mat";
+    end
     remapping=[];
     rot_k_idx = 5;
 end
@@ -35,13 +44,11 @@ lines3D=readmatrix(data_folder+"/3Dlines.csv");
 rot_data = load(rot_data_path);
 record_rot_SCM_ML = rot_data.Record_SCM_ML_lists{rot_k_idx};
 epsilon_r = 0.015;
-q_rot = [0.7,0.6,0.6,0.9];
-L_rot = q_rot(scene_idx)/(1-q_rot(scene_idx))/epsilon_r;
 %%% trans params
 branch_reso_t = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres_t  = 0.01; %
 epsilon_t = 0.03;
-L_list = [3,5,10,30,50,100,300];
+L_list = [10,30,50,100,300];
 num_q = length(L_list);
 %%% statistics
 column_names=["Image Id","# 2D lines","Outlier Ratio","IR Err Rot","IR Err Trans", "Rot Err","Trans Err", "time"];
@@ -149,9 +156,17 @@ for k=1:num_q
 end
 
 if pred_flag
-    output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_full_record.mat";
+    if two_or_eight
+        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_full_record_2.mat";
+    else
+        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_full_record_8.mat";
+    end
 else
-    output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_full_record.mat";
+    if two_or_eight
+        output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_full_record_2.mat";
+    else
+        output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_full_record_8.mat";
+    end
 end
 save(output_filename);
 %%

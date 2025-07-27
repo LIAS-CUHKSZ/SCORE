@@ -16,7 +16,6 @@
 %%%%
 
 function [t_best,best_lower,num_candidate,time,upper_record,lower_record] = Sat_TransFGO(pert_rot_n_2D,endpoints_3D,ids,kernel_buff,space_size,branch_reso,epsilon_t,prox_thres)
-verbose_flag=0; %    bool, set true for detailed bnb process info.
 mex_flag=1;     %    bool, set true to use mex code for acceleration.
 if mex_flag
     UB_fh = @Sat_Trans_U_mex;
