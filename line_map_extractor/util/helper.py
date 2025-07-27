@@ -4,7 +4,7 @@ helper.py
 This module provides functions and parameters for line_extractor_pt1 and pt2. 
 
 Author: Haodong JIANG <221049033@link.cuhk.edu.cn>
-Version: 1.0
+ 
 License: MIT
 """
 import pyelsed

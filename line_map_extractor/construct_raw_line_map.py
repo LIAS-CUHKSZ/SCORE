@@ -11,7 +11,7 @@ Output:
 - A numpy file containing all the extracted 2D lines and regressed 3D lines.
 
 Author: Haodong JIANG <221049033@link.cuhk.edu.cn>
-Version: 1.0
+ 
 License: MIT
 """
 
@@ -475,7 +475,7 @@ def main(data_root_dir,output_root_dir,scene_id):
 if __name__ == "__main__":
     data_root_dir = "/data2/scannetppv2"
     output_root_dir = "/data1/home/lucky/IROS25/SCORE/"
-    scene_list = ["69e5939669","689fec23d7","c173f62b15","a1d9da703c"]
+    scene_list = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"]
     scene_id = scene_list[3]
     main(data_root_dir,output_root_dir,scene_id)
 

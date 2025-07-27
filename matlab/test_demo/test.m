@@ -22,15 +22,15 @@ prox_thres_r =  1*pi/180; % for clustering proximate stabbers
 branch_reso_r = pi/256; % terminate bnb when branch size < branch_reso
 sample_reso_r = pi/256; % resolution for interval analysis
 epsilon_r = 0.015;
-% this flag is used to initialize the BnB process
-% set it at 2 since we do not include image retriveal in this demo
-west_east_flag = 2; 
-
+q = 0.9;
+L_rot = 1/epsilon_r*q/(1-q);
 %%% trans params
 branch_reso_t = 0.01; % terminate bnb when branch size <= branch_reso
 prox_thres_t  = 0.01; %
 epsilon_t = 0.03;
-
+L_trans = 1/epsilon_t*q/(1-q);
+%%%
+search_branch = [[0;0;pi;pi],[0;pi;pi;2*pi]];
 % ---------------------------------------------------------------------
 % --- 1. load data ---
 K_p=readmatrix(data_folder+"camera_intrinsic.csv"); 
@@ -49,26 +49,24 @@ lines3D = readmatrix(data_folder+"/3Dlines.csv");
 %-------------------------------------------------------------
 %---- 3. complete pipeline starts here -----
 outlier_ratio = 1-nnz(lines2D(:,9)>0)/size(n_2D,1);
+num_2D_lines = size(lines2D,1);
 fprintf("%d 2D lines with %d associations at a outlier ratio of %f\n",num_2D_lines,length(ids),outlier_ratio)
 % o=1: consensus maximization
 % o=2: saturated consensus maximization
 for o = 1:2
     % saturation function design
-    num_2D_lines = size(lines2D,1);
     match_count = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
         match_count(i) = sum(ids==i);
     end
     rot_kernel_buff_CM = ones(num_2D_lines,max(match_count));    % classic CM
-    L = sum(log(match_count(match_count>0)));
-    rot_kernel_buff_SCM_entropy = zeros(num_2D_lines,max(match_count));
+    rot_kernel_buff_SCM_ML = zeros(num_2D_lines,max(match_count));
     for i = 1:num_2D_lines
         if match_count(i)==0
             continue
         end
-        rot_kernel_buff_SCM_entropy(i,1)=1-log(match_count(i))/L;
-        for j = 2:match_count(i)
-            rot_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/L;
+        for j = 1:match_count(i)
+            rot_kernel_buff_SCM_ML(i,j)=log(1+L_rot*j/match_count(i))-log(1+L_rot*(j-1)/match_count(i));
         end
     end
     % --- rotation estmation --- %
@@ -77,39 +75,36 @@ for o = 1:2
         rot_kernel_buff = rot_kernel_buff_CM;
     else
         fprintf("===relocalization with saturated consensus maximization===\n")
-        rot_kernel_buff = rot_kernel_buff_SCM_entropy;
+        rot_kernel_buff = rot_kernel_buff_SCM_ML;
     end
     time_all = 0;
-    [R_opt_top,~,num_candidate_rot,time,~,~] = ...
+    [R_opt,~,num_candidate_rot,time,~,~] = ...
         Sat_RotFGO(n_2D,v_3D,ids,rot_kernel_buff,...
-        branch_reso_r,epsilon_r,sample_reso_r,prox_thres_r,west_east_flag);
+        branch_reso_r,epsilon_r,sample_reso_r,prox_thres_r,search_branch);
     time_all = time_all+time;
 
     % --- translation estmation --- %
-    R_opt = R_opt_top';
     [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot] = ...
-        under_specific_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r);
+        preprocess_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r);
     %%% saturation function design
     match_count_pruned = zeros(num_2D_lines,1);
     for i = 1:num_2D_lines
         match_count_pruned(i) = sum(id_inliers_under_rot==i);
     end
-    LL = sum(log(match_count_pruned(match_count_pruned>0)));
-    trans_kernel_buff_SCM_entropy= zeros(num_2D_lines,max(match_count_pruned));
+    trans_kernel_buff_SCM_ML= zeros(num_2D_lines,max(match_count_pruned));
     trans_kernel_buff_CM = ones(num_2D_lines,max(match_count_pruned));
     for i = 1:num_2D_lines
         if match_count_pruned(i)==0
             continue
         end
-        trans_kernel_buff_SCM_entropy(i,1)=1-log(match_count_pruned(i))/LL;
-        for j = 2:match_count_pruned(i)
-            trans_kernel_buff_SCM_entropy(i,j)=(log(j)-log(j-1))/LL;
+        for j = 1:match_count_pruned(i)
+            trans_kernel_buff_SCM_ML(i,j)=log(1+L_trans*j/match_count(i))-log(1+L_trans*(j-1)/match_count(i));
         end
     end
     if o==1
         trans_kernel_buff = trans_kernel_buff_CM;
     else
-        trans_kernel_buff=trans_kernel_buff_SCM_entropy;
+        trans_kernel_buff=trans_kernel_buff_SCM_ML;
     end
     [t_best_candidates,~,num_candidate,time,~,~] = Sat_TransFGO(pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot,trans_kernel_buff,space_size,branch_reso_t,epsilon_t,prox_thres_t);
     time_all = time_all+time;
@@ -129,7 +124,7 @@ end
 % ---------------------------------------------------------------------
 % --- sub-functions ---
 function [pert_rot_n_2D_inlier,endpoints_3D_inlier,id_inliers_under_rot] = ...
-    under_specific_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r)
+    preprocess_rot(ids,R_opt,v_3D,n_2D,endpoints_3D,epsilon_r)
 inlier_under_rot = find(abs(dot(R_opt'*v_3D',n_2D'))<=epsilon_r);
 id_inliers_under_rot = ids(inlier_under_rot);
 n_2D_inlier=n_2D(inlier_under_rot,:); v_3D_inlier=v_3D(inlier_under_rot,:);

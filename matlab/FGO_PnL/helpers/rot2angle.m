@@ -12,6 +12,7 @@ function [alpha, phi,theta] = rot2angle(R)
             phi = atan2(axis(2), axis(1));
             alpha = atan2( sqrt(axis(1)^2 + axis(2)^2), axis(3));
         end
-
-
+        if phi <0 % [-pi,pi]-->[0,2pi]
+            phi = phi + 2*pi;
+        end
     end
