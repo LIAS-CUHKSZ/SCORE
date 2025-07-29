@@ -11,28 +11,47 @@
 %%% License: MIT
 clear;
 clc
-scene_idx = 4; % choose one scene
-pred_flag = 1; % set 1 if use predicted semantic label
-two_or_eight = 1; % set 1 if divided into west or east
+scene_idx = 3; % choose one scene
+pred_flag = 0; % set 1 if use predicted semantic label
+two_or_eight = 0; % set 1 if divided into west or east
                   % set 0 if divided into eight
 dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
 dataset_name = dataset_names(scene_idx);
-% load semantic remapping 
-if pred_flag
-    L_list = [30,60,120,240,360,480,600]; % q from 0.3 to 0.9
-    data_folder="csv_dataset/"+dataset_name+"_pred/";
-    remapping = load(data_folder+"remapping.txt");
-else
-    L_list = [66,66*sqrt(10),660,660*sqrt(10),6600,13200]; % q from 0.5 to 0.995
-    data_folder="csv_dataset/"+dataset_name+"/";
-    remapping = [];
-end
+
 % params
 prox_thres = 1*pi/180; % for clustering proximate stabbers
 branch_reso = pi/512; % terminate bnb early when branch size < branch_reso
 sample_reso = pi/512; % resolution for interval analysis
 epsilon_r = 0.015;
+
+% 
+if pred_flag
+    q_list = [0.2,0.35,0.5,0.65,0.8];
+    L_list = q_list./(1-q_list)*1/epsilon_r;
+    data_folder="csv_dataset/"+dataset_name+"_pred/";
+    remapping = load(data_folder+"remapping.txt");
+else
+    q_list = [0.6,0.7,0.8,0.9,0.99];
+    L_list = q_list./(1-q_list)*1/epsilon_r;
+    data_folder="csv_dataset/"+dataset_name+"/";
+    remapping = [];
+end
 num_q = length(L_list);
+
+% output_name
+if pred_flag
+    if two_or_eight
+        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_2.mat";
+    else
+        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_8.mat";
+    end
+else
+    if two_or_eight
+       output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_2.mat";
+    else
+       output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_8.mat";
+    end
+end
 
 % table to record results
 total_img=2000;
@@ -42,8 +61,8 @@ columnTypes =...
     ["int32","int32","double","double","double","double","double","int32","double","double","double","cell"];
 Record_CM_FGO      =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
 Record_SCM_trunc   =table('Size', [total_img, length(column_names)],'VariableTypes', columnTypes,'VariableNames', column_names);
-temp_buffer = cell(total_img,num_q);  % store results for likelihood-based saturation function in a temp buffer
 %%
+temp_buffer = cell(total_img,num_q);  % store results for likelihood-based saturation function in a temp buffer
 lines3D=readmatrix(data_folder+"/3Dlines.csv");
 parfor num = 1:total_img
     % ---------------------------------------------------------------------
@@ -131,21 +150,21 @@ parfor num = 1:total_img
     gt_inliers_idx = find(abs(dot(R_gt'*v_3D',n_2D'))<=epsilon_r);
     gt_inliers_id = ids(gt_inliers_idx);
 
-    % CM_FGO
-    gt_score = calculate_score(gt_inliers_id,kernel_buff_CM);
-    [R_opt,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_CM,...
-        branch_reso,epsilon_r,sample_reso,prox_thres,initial_branch);
-    [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt,R_gt);
-    Record_CM_FGO(num,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{R_opt}};
-
-    % SCM_FGO_trunc
-    gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_trunc);
-    [R_opt,best_score,num_candidate,time,~,~] = ...
-        Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_trunc,...
-        branch_reso,epsilon_r,sample_reso,prox_thres,initial_branch);
-    [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt,R_gt);
-    Record_SCM_trunc(num,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{R_opt}};
+    % % CM_FGO
+    % gt_score = calculate_score(gt_inliers_id,kernel_buff_CM);
+    % [R_opt,best_score,num_candidate,time,~,~] = ...
+    %     Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_CM,...
+    %     branch_reso,epsilon_r,sample_reso,prox_thres,initial_branch);
+    % [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt,R_gt);
+    % Record_CM_FGO(num,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{R_opt}};
+    % 
+    % % SCM_FGO_trunc
+    % gt_score = calculate_score(gt_inliers_id,kernel_buff_SCM_trunc);
+    % [R_opt,best_score,num_candidate,time,~,~] = ...
+    %     Sat_RotFGO(n_2D,v_3D,ids,kernel_buff_SCM_trunc,...
+    %     branch_reso,epsilon_r,sample_reso,prox_thres,initial_branch);
+    % [min_err,max_err,R_min,R_max]=min_max_rot_error(num_candidate,R_opt,R_gt);
+    % Record_SCM_trunc(num,:)={img_idx,size(lines2D,1),epsilon_r,outlier_ratio,retrived_err_rot,max_err,min_err,num_candidate,best_score,gt_score,time,{R_opt}};
 
     % SCM_FGO_ML
     for k = 1:num_q
@@ -178,20 +197,6 @@ for num=1:total_img
 end
 for k=1:num_q
     Record_SCM_ML_lists{k}(Record_SCM_ML_lists{k}.("Best Score")==0,:)=[];
-end
-% save data
-if pred_flag
-    if two_or_eight
-        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_2.mat";
-    else
-        output_filename= "./matlab/Experiments/records/pred_semantics/"+dataset_name+"_pred_rotation_record_8.mat";
-    end
-else
-    if two_or_eight
-       output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_2.mat";
-    else
-       output_filename= "./matlab/Experiments/records/gt_semantics/"+dataset_name+"_rotation_record_8.mat";
-    end
 end
 save(output_filename);
 %%
