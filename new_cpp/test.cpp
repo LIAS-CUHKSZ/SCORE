@@ -185,7 +185,11 @@ int main()
       M_PI / 256.0;                    // terminate bnb when branch size < resolution
   double sample_reso_r = M_PI / 256.0; // resolution for interval analysis
   double epsilon_r = 0.015;
-  int west_east_flag = 2; // TODO: branch over whole sphere?
+
+  // Create initial branches (both hemispheres)
+  std::vector<Branch> initial_branches;
+  initial_branches.push_back(Branch(0, 0, M_PI, M_PI));        // East hemisphere
+  initial_branches.push_back(Branch(0, M_PI, M_PI, 2 * M_PI)); // West hemisphere
 
   for (int method = 0; method < 2; method++)
   {
@@ -208,7 +212,7 @@ int main()
     auto start_time = std::chrono::high_resolution_clock::now();
     RotFGO solver(branch_reso_r, epsilon_r, sample_reso_r, prox_thres_r, use_saturated);
     std::vector<Eigen::Matrix3d> R_candidates =
-        solver.solve(n_2D, v_3D, ids, west_east_flag);
+        solver.solve(n_2D, v_3D, ids, initial_branches);
     auto end_time = std::chrono::high_resolution_clock::now();
 
     double solve_time =

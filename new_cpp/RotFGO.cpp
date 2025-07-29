@@ -13,7 +13,7 @@ std::vector<Eigen::Matrix3d>
 RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
               const std::vector<Eigen::Vector3d> &vector_v,
               const std::vector<int> &ids,
-              int west_or_east)
+              const std::vector<Branch> &initial_branches)
 {
   // Step 1: Create kernel buffer
   auto t_kernel_start = std::chrono::high_resolution_clock::now();
@@ -29,74 +29,93 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   BranchQueue q;
 
   double best_lb = -1.0;
-  double pre_best_lb = -1.0;
   std::vector<Eigen::Vector3d> u_best;
   std::vector<double> theta_best;
   int iter = 0;
 
-  // Step 4: Initialize with hemisphere(s) based on west_or_east parameter
-  if (west_or_east == 2)
+  // Step 4: Initialize with user-provided branches
+  for (auto branch : initial_branches)
   {
-    // all space
-    Branch east_hemisphere(0, 0, PI, PI);
-    Branch west_hemisphere(0, PI, PI, 2 * PI);
-
-    auto theta_candidates_east =
-        calculateBounds(line_pair_data, east_hemisphere, ids, kernel_buffer);
-    auto theta_candidates_west =
-        calculateBounds(line_pair_data, west_hemisphere, ids, kernel_buffer);
-
-    updateBestSolution(east_hemisphere, theta_candidates_east, best_lb, u_best, theta_best);
-    updateBestSolution(west_hemisphere, theta_candidates_west, best_lb, u_best, theta_best);
-    q.push(east_hemisphere);
-    q.push(west_hemisphere);
-  }
-  else
-  {
-    // Process single hemisphere
-    Branch initial_hemisphere = (west_or_east == 1) ? Branch(0, PI, PI, 2 * PI) : // West hemisphere
-                                    Branch(0, 0, PI, PI);                         // East hemisphere
-    q.push(initial_hemisphere);
+    auto theta_candidates = calculateBounds(line_pair_data, branch, ids, kernel_buffer);
+    updateBestSolution(branch, theta_candidates, best_lb, u_best, theta_best);
+    q.push(branch);
   }
 
   // Step 5: Main branch-and-bound loop
+  bool stop = false;
   while (!q.empty())
   {
-    Branch cur_branch = std::move(q.top());
+    // Get up to 2 branches from the queue for parallel processing
+    std::vector<Branch> cur_bs;
+
+    // Pop first branch
+    cur_bs.emplace_back(std::move(const_cast<Branch &>(q.top())));
     q.pop();
 
-    if (cur_branch.size() < branch_resolution_)
-      break;
-
-    std::vector<Branch> sub_branches = std::move(cur_branch.subDivide());
-    std::array<std::future<std::vector<double>>, 4> futures;
-    for (int i = 0; i < 4; ++i)
+    // Pop second branch if available and if first branch is large enough
+    if (!q.empty() && cur_bs[0].size() >= branch_resolution_)
     {
-      futures[i] = std::async(std::launch::async,
-                              [&, i]()
-                              {
-                                return calculateBounds(line_pair_data, sub_branches[i], ids, kernel_buffer);
-                              });
+      cur_bs.emplace_back(std::move(const_cast<Branch &>(q.top())));
+      q.pop();
     }
 
-    for (int i = 0; i < 4; ++i)
+    // Process all branches and their sub-branches asynchronously
+    std::vector<std::future<std::vector<double>>> futures;
+    std::vector<Branch> sub_b;
+
+    for (const auto &b : cur_bs)
     {
+      if (b.size() >= branch_resolution_)
+      {
+        std::vector<Branch> sub_branches = b.subDivide();
+        sub_b.insert(sub_b.end(), sub_branches.begin(), sub_branches.end());
+      }
+    }
+
+    // Create async tasks for all sub-branches
+    for (size_t i = 0; i < sub_b.size(); ++i)
+    {
+      futures.push_back(std::async(std::launch::async,
+                                   [this, &line_pair_data, &sub_b, &ids, &kernel_buffer, i]()
+                                   {
+                                     return calculateBounds(line_pair_data, sub_b[i], ids, kernel_buffer);
+                                   }));
+    }
+
+    // Process results from all async tasks
+    for (size_t i = 0; i < futures.size(); ++i)
+    {
+      ++iter;
       auto theta_candidates = futures[i].get();
-      pre_best_lb = best_lb;
-      updateBestSolution(sub_branches[i], theta_candidates, best_lb,
+
+      updateBestSolution(sub_b[i], theta_candidates, best_lb,
                          u_best, theta_best);
 
-      // std::cout << "iter: " << ++iter
-      //           << ", upper: " << sub_branches[i].upper_bound
-      //           << ", lower: " << sub_branches[i].lower_bound
+      if (sub_b[i].upper_bound > best_lb)
+      {
+        q.push(sub_b[i]);
+      }
+      else if (sub_b[i].upper_bound < best_lb + 1e-10 &&
+               sub_b[i].lower_bound == best_lb)
+      {
+        stop = true;
+        break;
+      }
+      else
+      {
+        continue;
+      }
+
+      pruneBranchQueue(q, best_lb);
+
+      // std::cout << "iter: " << iter
+      //           << ", upper: " << sub_b[i].upper_bound
+      //           << ", lower: " << sub_b[i].lower_bound
       //           << ", best : " << best_lb << std::endl;
-
-      if (best_lb > pre_best_lb)
-        pruneBranchQueue(q, best_lb);
-
-      if (sub_branches[i].upper_bound >= best_lb + 1e-10)
-        q.push(sub_branches[i]);
     }
+
+    if (stop || iter >= 2500)
+      break;
   }
 
   // Step 6: Generate rotation matrices

@@ -133,7 +133,7 @@ public:
   solve(const std::vector<Eigen::Vector3d> &vector_n,
         const std::vector<Eigen::Vector3d> &vector_v,
         const std::vector<int> &ids,
-        int west_or_east = 2);
+        const std::vector<Branch> &initial_branches);
 
 private:
   // Kernel buffer creation (now non-static)
