@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(RotFGO_CPP)
+project(FGO_CPP)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -16,7 +16,7 @@ else()
 endif()
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-add_executable(test_rotfgo test.cpp RotFGO.cpp)
+add_executable(test_rotfgo test.cpp RotFGO.cpp TransFGO.cpp)
 target_link_libraries(test_rotfgo Eigen3::Eigen)
 
 

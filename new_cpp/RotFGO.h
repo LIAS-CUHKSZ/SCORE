@@ -30,19 +30,19 @@ struct LinePairData
   int size;
 };
 
-struct Branch
+struct RBranch
 {
   double alpha_min, phi_min, alpha_max, phi_max;
   double upper_bound, lower_bound;
 
-  Branch()
+  RBranch()
       : alpha_min(0), phi_min(0), alpha_max(0), phi_max(0), upper_bound(-1),
         lower_bound(-1) {}
-  Branch(double a_min, double p_min, double a_max, double p_max)
+  RBranch(double a_min, double p_min, double a_max, double p_max)
       : alpha_min(a_min), phi_min(p_min), alpha_max(a_max), phi_max(p_max),
         upper_bound(-1), lower_bound(-1) {}
-  Branch(double a_min, double p_min, double a_max, double p_max,
-         double u_bound, double l_bound)
+  RBranch(double a_min, double p_min, double a_max, double p_max,
+          double u_bound, double l_bound)
       : alpha_min(a_min), phi_min(p_min), alpha_max(a_max), phi_max(p_max),
         upper_bound(u_bound), lower_bound(l_bound) {}
 
@@ -52,7 +52,7 @@ struct Branch
     return alpha_max - alpha_min;
   }
 
-  std::vector<Branch> subDivide() const
+  std::vector<RBranch> subDivide() const
   {
     // Compute midpoints for alpha and phi
     double alpha_mid = 0.5 * (alpha_min + alpha_max);
@@ -68,7 +68,7 @@ struct Branch
   // by upper_bound (descending), then by size (descending)
   struct Comparator
   {
-    inline bool operator()(const Branch &a, const Branch &b) const noexcept
+    inline bool operator()(const RBranch &a, const RBranch &b) const noexcept
     {
       const double diff = a.upper_bound - b.upper_bound;
       if (std::abs(diff) < 1e-10)
@@ -83,7 +83,7 @@ struct Branch
 class RotFGO
 {
 public:
-  using BranchQueue = std::priority_queue<Branch, std::vector<Branch>, Branch::Comparator>;
+  using BranchQueue = std::priority_queue<RBranch, std::vector<RBranch>, RBranch::Comparator>;
   // configuration structure for RotFGO parameters
   struct RotFGOConfig
   {
@@ -133,7 +133,7 @@ public:
   solve(const std::vector<Eigen::Vector3d> &vector_n,
         const std::vector<Eigen::Vector3d> &vector_v,
         const std::vector<int> &ids,
-        const std::vector<Branch> &initial_branches);
+        const std::vector<RBranch> &initial_branches);
 
 private:
   // Kernel buffer creation (now non-static)
@@ -143,7 +143,7 @@ private:
   std::tuple<Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d, Eigen::Vector2d>
   calculateNormals(const Eigen::Vector3d &v1, const Eigen::Vector3d &v2);
 
-  void updateBestSolution(const Branch &branch,
+  void updateBestSolution(const RBranch &branch,
                           const std::vector<double> &theta_candidates,
                           double &best_lower_bound,
                           std::vector<Eigen::Vector3d> &best_axes,
@@ -152,13 +152,9 @@ private:
   void pruneBranchQueue(BranchQueue &branch_queue,
                         double best_lower_bound);
 
-  std::vector<double> calculateBounds(const LinePairData &line_pair_data, Branch &branch,
-                                      const std::vector<int> &ids,
-                                      const Eigen::MatrixXd &kernel_buffer);
-
-  std::pair<double, std::vector<double>> saturatedIntervalStabbing(
-      const std::vector<double> &intervals, const std::vector<int> &ids,
-      const Eigen::MatrixXd &kernel_buffer);
+  std::vector<double> calcBounds(const LinePairData &line_pair_data, RBranch &branch,
+                                 const std::vector<int> &ids,
+                                 const Eigen::MatrixXd &kernel_buffer);
 
   std::vector<double> lowerInterval(double A, double phi, double constant);
   std::vector<double> upperInterval(double A_1, double phi_1,
@@ -166,16 +162,13 @@ private:
                                     double phi_2, double const_2);
 
   std::pair<std::vector<double>, std::vector<double>>
-  h1IntervalMapping(const LinePairData &line_pair_data, const Branch &branch);
+  h1IntervalMapping(const LinePairData &line_pair_data, const RBranch &branch);
   std::pair<std::vector<double>, std::vector<double>>
-  h2IntervalMapping(const LinePairData &line_pair_data, const Branch &branch);
+  h2IntervalMapping(const LinePairData &line_pair_data, const RBranch &branch);
 
   std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>
   calcIntervalParams(const std::vector<double> &inner_product,
                      const std::vector<double> &h1, const std::vector<double> &h2);
-
-  // cluster similar stabbers
-  std::vector<double> clusterStabber(const std::vector<double> &theta);
 
   Eigen::Vector3d polarToXyz(double alpha, double phi) noexcept;
   std::pair<double, double> xyzToPolar(const Eigen::Vector3d &axis) noexcept;

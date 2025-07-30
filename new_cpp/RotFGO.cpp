@@ -1,4 +1,6 @@
 #include "RotFGO.h"
+#include "SatIS.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -13,7 +15,7 @@ std::vector<Eigen::Matrix3d>
 RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
               const std::vector<Eigen::Vector3d> &vector_v,
               const std::vector<int> &ids,
-              const std::vector<Branch> &initial_branches)
+              const std::vector<RBranch> &initial_branches)
 {
   // Step 1: Create kernel buffer
   auto t_kernel_start = std::chrono::high_resolution_clock::now();
@@ -36,7 +38,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   // Step 4: Initialize with user-provided branches
   for (auto branch : initial_branches)
   {
-    auto theta_candidates = calculateBounds(line_pair_data, branch, ids, kernel_buffer);
+    auto theta_candidates = calcBounds(line_pair_data, branch, ids, kernel_buffer);
     updateBestSolution(branch, theta_candidates, best_lb, u_best, theta_best);
     q.push(branch);
   }
@@ -46,28 +48,28 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   while (!q.empty())
   {
     // Get up to 2 branches from the queue for parallel processing
-    std::vector<Branch> cur_bs;
+    std::vector<RBranch> cur_bs;
 
     // Pop first branch
-    cur_bs.emplace_back(std::move(const_cast<Branch &>(q.top())));
+    cur_bs.emplace_back(std::move(const_cast<RBranch &>(q.top())));
     q.pop();
 
     // Pop second branch if available and if first branch is large enough
     if (!q.empty() && cur_bs[0].size() >= branch_resolution_)
     {
-      cur_bs.emplace_back(std::move(const_cast<Branch &>(q.top())));
+      cur_bs.emplace_back(std::move(const_cast<RBranch &>(q.top())));
       q.pop();
     }
 
     // Process all branches and their sub-branches asynchronously
     std::vector<std::future<std::vector<double>>> futures;
-    std::vector<Branch> sub_b;
+    std::vector<RBranch> sub_b;
 
     for (const auto &b : cur_bs)
     {
       if (b.size() >= branch_resolution_)
       {
-        std::vector<Branch> sub_branches = b.subDivide();
+        std::vector<RBranch> sub_branches = b.subDivide();
         sub_b.insert(sub_b.end(), sub_branches.begin(), sub_branches.end());
       }
     }
@@ -78,7 +80,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
       futures.push_back(std::async(std::launch::async,
                                    [this, &line_pair_data, &sub_b, &ids, &kernel_buffer, i]()
                                    {
-                                     return calculateBounds(line_pair_data, sub_b[i], ids, kernel_buffer);
+                                     return calcBounds(line_pair_data, sub_b[i], ids, kernel_buffer);
                                    }));
     }
 
@@ -208,80 +210,6 @@ LinePairData RotFGO::dataProcess(const std::vector<Eigen::Vector3d> &vector_n,
     data.outer_norm[i] = data.outer_product[i].norm();
   }
   return data;
-}
-
-std::pair<double, std::vector<double>> RotFGO::saturatedIntervalStabbing(
-    const std::vector<double> &intervals, const std::vector<int> &ids,
-    const Eigen::MatrixXd &kernel_buffer)
-{
-  size_t L = ids.size();
-  std::vector<std::pair<double, std::pair<int, int>>>
-      events; // (value, (mask, id_index))
-
-  for (size_t i = 0; i < L; i++)
-  {
-    events.emplace_back(std::make_pair(intervals[2 * i], std::make_pair(0, i)));     // entering interval
-    events.emplace_back(std::make_pair(intervals[2 * i + 1], std::make_pair(1, i))); // exiting interval
-  }
-  // Sort events by value
-  std::sort(events.begin(), events.end());
-  int max_id = *std::max_element(ids.begin(), ids.end());
-  std::vector<int> count_buffer(max_id + 1, 0);
-
-  double score = 0.0;
-  double best_score = 0.0;
-  std::vector<double> stabbers;
-
-  for (size_t i = 0; i < events.size() - 1; i++)
-  {
-    double current_pos = events[i].first;
-    int mask = events[i].second.first;
-    int id_idx = events[i].second.second;
-    int line_id = ids[id_idx];
-
-    if (mask == 0)
-    { // entering interval
-      count_buffer[line_id]++;
-      score += kernel_buffer(line_id, count_buffer[line_id] - 1); // 0-indexed access
-
-      if (score >= best_score)
-      {
-        double next_pos = events[i + 1].first;
-        // Generate stabbers in this interval using the MATLAB approach
-        std::vector<double> new_stabbers;
-
-        double pos = current_pos;
-        while (pos <= next_pos)
-        {
-          new_stabbers.emplace_back(pos);
-          pos += prox_threshold_;
-        }
-        // Always include the endpoint
-        if (new_stabbers.empty() || new_stabbers.back() != next_pos)
-        {
-          new_stabbers.emplace_back(next_pos);
-        }
-
-        if (score > best_score)
-        {
-          stabbers = new_stabbers;
-          best_score = score;
-        }
-        else if (score == best_score)
-        {
-          stabbers.insert(stabbers.end(), new_stabbers.begin(),
-                          new_stabbers.end());
-        }
-      }
-    }
-    else
-    { // exiting interval
-      score -= kernel_buffer(line_id, count_buffer[line_id] - 1);
-      count_buffer[line_id]--;
-    }
-  }
-
-  return {best_score, stabbers};
 }
 
 Eigen::Vector3d RotFGO::polarToXyz(double alpha, double phi) noexcept
@@ -763,7 +691,7 @@ std::vector<double> RotFGO::upperInterval(double A_1, double phi_1,
 
 std::pair<std::vector<double>, std::vector<double>>
 RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
-                          const Branch &branch)
+                          const RBranch &branch)
 {
   size_t N = line_pair_data.size;
   std::vector<double> h1_upper(N), h1_lower(N);
@@ -1075,7 +1003,7 @@ RotFGO::h1IntervalMapping(const LinePairData &line_pair_data,
 
 std::pair<std::vector<double>, std::vector<double>>
 RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
-                          const Branch &branch)
+                          const RBranch &branch)
 {
   size_t N = line_pair_data.size;
   std::vector<double> h2_upper(N), h2_lower(N);
@@ -1218,8 +1146,8 @@ RotFGO::h2IntervalMapping(const LinePairData &line_pair_data,
   return {h2_upper, h2_lower};
 }
 
-std::vector<double> RotFGO::calculateBounds(
-    const LinePairData &line_pair_data, Branch &branch,
+std::vector<double> RotFGO::calcBounds(
+    const LinePairData &line_pair_data, RBranch &branch,
     const std::vector<int> &ids,
     const Eigen::MatrixXd &kernel_buffer)
 {
@@ -1266,8 +1194,8 @@ std::vector<double> RotFGO::calculateBounds(
   std::vector<double> theta_lower;
   if (!ids_lower.empty())
   {
-    auto [score, stabbers] = saturatedIntervalStabbing(
-        intervals_lower, ids_lower, kernel_buffer);
+    auto [score, stabbers] = SatIS::saturatedIntervalStabbing(
+        intervals_lower, ids_lower, kernel_buffer, prox_threshold_);
     branch.lower_bound = score;
     theta_lower = stabbers;
   }
@@ -1304,8 +1232,8 @@ std::vector<double> RotFGO::calculateBounds(
 
   if (!ids_upper.empty())
   {
-    auto [score, _] = saturatedIntervalStabbing(intervals_upper, ids_upper,
-                                                kernel_buffer);
+    auto [score, _] = SatIS::saturatedIntervalStabbing(intervals_upper, ids_upper,
+                                                       kernel_buffer, prox_threshold_);
     branch.upper_bound = score;
   }
   return theta_lower;
@@ -1327,81 +1255,6 @@ RotFGO::calcIntervalParams(const std::vector<double> &inner_product,
     constant[i] = inner_product[i] + h2[i];
   }
   return std::make_tuple(A, phi, constant);
-}
-
-std::vector<double> RotFGO::clusterStabber(const std::vector<double> &theta)
-{
-  if (theta.empty())
-    return {};
-  if (theta.size() == 1)
-    return {theta[0]};
-
-  std::vector<double> sorted_theta = theta;
-  std::sort(sorted_theta.begin(), sorted_theta.end());
-  std::vector<double> stabber_buffer;
-  std::vector<double> stabber_clustered;
-
-  stabber_buffer.emplace_back(sorted_theta[0]);
-
-  for (size_t n = 1; n < sorted_theta.size(); n++)
-  {
-    double new_stabber = sorted_theta[n];
-
-    if (new_stabber - stabber_buffer[0] > prox_threshold_)
-    {
-      // Case 1: difference with current stabber head is too large
-      // Get median stabber in the buffer
-      int temp_idx = stabber_buffer.size() - 1 + (stabber_buffer.size() % 2);
-      std::vector<double> temp_buffer(stabber_buffer.begin(),
-                                      stabber_buffer.begin() + temp_idx);
-      std::sort(temp_buffer.begin(), temp_buffer.end());
-
-      double median_stabber;
-      if (temp_buffer.size() % 2 == 1)
-      {
-        median_stabber = temp_buffer[temp_buffer.size() / 2];
-      }
-      else
-      {
-        median_stabber = (temp_buffer[temp_buffer.size() / 2 - 1] +
-                          temp_buffer[temp_buffer.size() / 2]) /
-                         2.0;
-      }
-
-      // Push new cluster into cluster buffer
-      stabber_clustered.emplace_back(median_stabber);
-
-      // Clear the stabber buffer
-      stabber_buffer.clear();
-    }
-
-    // Push in the current stabber
-    stabber_buffer.emplace_back(new_stabber);
-  }
-
-  // Handle the last cluster
-  if (!stabber_buffer.empty())
-  {
-    int temp_idx = stabber_buffer.size() - 1 + (stabber_buffer.size() % 2);
-    std::vector<double> temp_buffer(stabber_buffer.begin(),
-                                    stabber_buffer.begin() + temp_idx);
-    std::sort(temp_buffer.begin(), temp_buffer.end());
-
-    double median_stabber;
-    if (temp_buffer.size() % 2 == 1)
-    {
-      median_stabber = temp_buffer[temp_buffer.size() / 2];
-    }
-    else
-    {
-      median_stabber = (temp_buffer[temp_buffer.size() / 2 - 1] +
-                        temp_buffer[temp_buffer.size() / 2]) /
-                       2.0;
-    }
-
-    stabber_clustered.emplace_back(median_stabber);
-  }
-  return stabber_clustered;
 }
 
 Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
@@ -1447,7 +1300,7 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
   return kernel_buffer;
 }
 
-void RotFGO::updateBestSolution(const Branch &branch,
+void RotFGO::updateBestSolution(const RBranch &branch,
                                 const std::vector<double> &theta_candidates,
                                 double &best_lb,
                                 std::vector<Eigen::Vector3d> &best_axes,
@@ -1458,7 +1311,7 @@ void RotFGO::updateBestSolution(const Branch &branch,
     best_lb = branch.lower_bound;
     best_axes.clear();
     best_angles.clear();
-    std::vector<double> clustered_theta = clusterStabber(theta_candidates);
+    std::vector<double> clustered_theta = SatIS::clusterStabber(theta_candidates, prox_threshold_);
     Eigen::Vector3d rotation_axis = polarToXyz(
         0.5 * (branch.alpha_min + branch.alpha_max),
         0.5 * (branch.phi_min + branch.phi_max));
@@ -1471,7 +1324,7 @@ void RotFGO::updateBestSolution(const Branch &branch,
   else if (std::abs(branch.lower_bound - best_lb) < 1e-10)
   {
     // Found an equally good solution - add to existing candidates
-    std::vector<double> clustered_theta = clusterStabber(theta_candidates);
+    std::vector<double> clustered_theta = SatIS::clusterStabber(theta_candidates, prox_threshold_);
     Eigen::Vector3d rotation_axis = polarToXyz(
         0.5 * (branch.alpha_min + branch.alpha_max),
         0.5 * (branch.phi_min + branch.phi_max));
@@ -1489,10 +1342,10 @@ void RotFGO::pruneBranchQueue(BranchQueue &bq, double best_lb)
   BranchQueue promising;
   while (!bq.empty())
   {
-    const Branch &branch = bq.top();
+    const RBranch &branch = bq.top();
     if (branch.upper_bound + 1e-10 < best_lb)
       break;
-    promising.push(std::move(const_cast<Branch &>(branch)));
+    promising.push(std::move(const_cast<RBranch &>(branch)));
     bq.pop();
   }
   bq = std::move(promising);

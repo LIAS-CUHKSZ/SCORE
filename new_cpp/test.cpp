@@ -1,4 +1,5 @@
 #include "RotFGO.h"
+#include "TransFGO.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -186,10 +187,16 @@ int main()
   double sample_reso_r = M_PI / 256.0; // resolution for interval analysis
   double epsilon_r = 0.015;
 
+  // Translation parameters
+  double branch_reso_t = 0.01;                // terminate bnb when branch size <= resolution
+  double prox_thres_t = 0.01;                 // proximity threshold for clustering
+  double epsilon_t = 0.03;                    // error tolerance for translation
+  Eigen::Vector3d space_size(10.5, 6.0, 3.0); // Scene bounding box for "69e5939669"
+
   // Create initial branches (both hemispheres)
-  std::vector<Branch> initial_branches;
-  initial_branches.push_back(Branch(0, 0, M_PI, M_PI));        // East hemisphere
-  initial_branches.push_back(Branch(0, M_PI, M_PI, 2 * M_PI)); // West hemisphere
+  std::vector<RBranch> initial_branches;
+  initial_branches.push_back(RBranch(0, 0, M_PI, M_PI));        // East hemisphere
+  initial_branches.push_back(RBranch(0, M_PI, M_PI, 2 * M_PI)); // West hemisphere
 
   for (int method = 0; method < 2; method++)
   {
@@ -207,6 +214,9 @@ int main()
       std::cout << "=== Relocalization with Classic Consensus Maximization ==="
                 << std::endl;
     }
+
+    // --- Rot Estimation ---
+    std::cout << "\n--- Rotation Estimation ---" << std::endl;
 
     // Create solver and solve
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -238,6 +248,43 @@ int main()
 
     std::cout << "Estimated rotation matrix:" << std::endl;
     std::cout << R_opt << std::endl;
+
+    // --- Translation Estimation ---
+    std::cout << "\n--- Translation Estimation ---" << std::endl;
+
+    // Create and run translation solver with internal preprocessing
+    auto trans_start_time = std::chrono::high_resolution_clock::now();
+    TransFGO trans_solver(branch_reso_t, epsilon_t, prox_thres_t, space_size, use_saturated);
+    Eigen::Vector3d t_fine_tuned = trans_solver.solve(ids, R_opt, v_3D, n_2D, endpoints_3D,
+                                                      epsilon_r, intrinsic_matrix);
+    auto trans_end_time = std::chrono::high_resolution_clock::now();
+
+    double trans_solve_time =
+        std::chrono::duration<double>(trans_end_time - trans_start_time).count();
+
+    if (t_fine_tuned.isZero())
+    {
+      std::cout << "Translation estimation failed!" << std::endl;
+      continue;
+    }
+
+    // Calculate translation error
+    double t_err = (t_fine_tuned - t_gt).norm();
+    double total_time = solve_time + trans_solve_time;
+
+    std::cout << "Translation error: " << t_err << " meters" << std::endl;
+    std::cout << "Translation solve time: " << trans_solve_time << " seconds" << std::endl;
+    std::cout << "Total time: " << total_time << " seconds" << std::endl;
+
+    std::cout << "Estimated translation vector:" << std::endl;
+    std::cout << t_fine_tuned.transpose() << std::endl;
+    std::cout << "Ground truth translation:" << std::endl;
+    std::cout << t_gt.transpose() << std::endl;
+
+    std::cout << "\n=== Summary ===" << std::endl;
+    std::cout << "Rotation error: " << angle_error * 180.0 / M_PI << " degrees" << std::endl;
+    std::cout << "Translation error: " << t_err << " meters" << std::endl;
+    std::cout << "Total pipeline time: " << total_time << " seconds" << std::endl;
   }
   return 0;
 }
