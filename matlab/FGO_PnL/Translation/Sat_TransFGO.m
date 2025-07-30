@@ -79,12 +79,8 @@ while ~isempty(branch)
     branch(:,(branch(5,:)+eps)<best_lower)=[]; 
     
     % terminate further branching if reaching resolution
-    if popped_branch(3,:)-popped_branch(1,:)<branch_reso 
+    if popped_branch(3,:)-popped_branch(1,:)+10^(-8)<branch_reso 
         continue;
-    end
-    % terminate further branching if reaching maximum iteration
-    if iter > 1500
-       continue;
     end
 
     % terminate further branching if 
@@ -105,12 +101,6 @@ while ~isempty(branch)
     best_upper  = max(branch(5,:));
     upper_record=[upper_record;best_upper];
     lower_record=[lower_record;best_lower];
-
-    % terminating condition 2
-    iter=iter+1;
-    if iter > 500
-        break
-    end
 end
 
 % --- 3. Output ---

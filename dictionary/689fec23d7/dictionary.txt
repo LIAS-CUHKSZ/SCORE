@@ -8,7 +8,6 @@
 7,chair
 8,box
 10,ceiling
-12,desk
 13,keyboard
 15,whiteboard
 16,bin
@@ -29,6 +28,7 @@
 ##########deleted semantic labels##########
 9,office chair
 11,door frame
+12,desk
 14,speaker
 17,ball
 20,cup

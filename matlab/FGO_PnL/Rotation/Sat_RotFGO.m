@@ -20,7 +20,6 @@
 function [R_opt,best_lower,num_candidate,time,upper_record,lower_record] = Sat_RotFGO(vector_n,vector_v,ids,kernel_buff,branch_reso,epsilon_r,sample_reso,prox_thres, initial_branch)
 
 % --- 0. settings ---
-% --- 0. settings ---
 mex_flag = 1; %set true to use mex code for acceleration.
 % choose the function handler according to mex_flag
 if mex_flag
@@ -83,12 +82,8 @@ while ~isempty(branch)
     branch(:,(branch(5,:)+eps)<best_lower)=[]; 
     
     % terminate further branching if reaching resolution
-    if popped_branch(3)-popped_branch(1)<branch_reso 
+    if popped_branch(3)-popped_branch(1)+10^(-8)<branch_reso 
         continue;
-    end
-    % terminate further branching if reach maximum iteration
-    if iter > 1000
-       continue;
     end
 
     % terminate further branching if 
@@ -101,7 +96,9 @@ while ~isempty(branch)
         % evaluate the upper bounds for each sub branch
         for i = 1:4
             new_upper = UB_fh(line_pair_data,new_branch(:,i),epsilon_r,sample_reso,ids,kernel_buff);
-            branch=[branch,[new_branch(:,i);new_upper]];
+            if new_upper+eps>best_lower
+               branch=[branch,[new_branch(:,i);new_upper]];
+            end
         end
     end
 end

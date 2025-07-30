@@ -22,8 +22,6 @@
 27,box
 29,computer tower
 30,monitor
-32,bar counter
-33,stool
 35,trash can
 39,socket
 41,pedestal fan
@@ -31,7 +29,6 @@
 46,speaker
 47,projector
 49,ceiling light
-52,sofa chair
 
 ##########deleted semantic labels##########
 7,christmas tree
@@ -42,6 +39,8 @@
 26,ball
 28,tool box
 31,wine bottle
+32,bar counter
+33,stool
 34,cone
 36,fire extinguisher
 37,cables
@@ -53,3 +52,4 @@
 48,bottle
 50,ceiling lamp
 51,mat
+52,sofa chair

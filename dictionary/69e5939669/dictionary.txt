@@ -2,6 +2,7 @@
 1,wall
 2,floor
 3,ceiling
+4,stool
 5,chair
 6,table
 10,ceiling lamp
@@ -25,7 +26,6 @@
 51,door
 
 ##########deleted semantic labels##########
-4,stool
 7,bookshelf
 8,curtain
 9,smoke detector
