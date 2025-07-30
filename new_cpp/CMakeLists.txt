@@ -21,8 +21,9 @@ include_directories(
 )
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 add_executable(test_rotfgo src/test.cpp src/RotFGO.cpp src/TransFGO.cpp src/helper.cpp)
+add_executable(experiment src/Experiment.cpp src/RotFGO.cpp src/TransFGO.cpp src/helper.cpp)
 target_link_libraries(test_rotfgo Eigen3::Eigen)
-
+target_link_libraries(experiment Eigen3::Eigen)
 
 # Enable comprehensive SIMD optimizations with architecture-specific flags
 if(MSVC)

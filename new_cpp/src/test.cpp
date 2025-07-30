@@ -75,6 +75,7 @@ int main()
   double sample_reso_r = M_PI / 256.0; // resolution for interval analysis
   double prox_thres_r = branch_reso_r;
   double epsilon_r = 0.015;
+  double q_value_r = 0.9;
 
   // Translation parameters
   double branch_reso_t = 0.01;                // terminate bnb when branch size <= resolution
@@ -109,7 +110,7 @@ int main()
 
     // Create solver and solve
     auto start_time = std::chrono::high_resolution_clock::now();
-    RotFGO solver(branch_reso_r, epsilon_r, sample_reso_r, prox_thres_r, use_saturated);
+    RotFGO solver(branch_reso_r, epsilon_r, sample_reso_r, prox_thres_r, use_saturated, q_value_r);
     std::vector<Eigen::Matrix3d> R_candidates =
         solver.solve(n_2D, v_3D, ids, initial_branches);
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -141,8 +142,8 @@ int main()
     // --- Translation Estimation ---
     std::cout << "\n--- Translation Estimation ---" << std::endl;
 
-    // Create and run translation solver with internal preprocessing
     auto trans_start_time = std::chrono::high_resolution_clock::now();
+    // Create and run translation solver with internal preprocessing
     TransFGO trans_solver(branch_reso_t, epsilon_t, prox_thres_t, space_size, use_saturated);
     Eigen::Vector3d t_fine_tuned = trans_solver.solve(ids, R_opt, v_3D, n_2D, endpoints_3D,
                                                       epsilon_r, intrinsic_matrix);

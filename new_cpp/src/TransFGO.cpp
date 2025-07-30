@@ -221,20 +221,21 @@ Eigen::MatrixXd TransFGO::createKernelBuffer(const std::vector<int> &ids)
 
     if (use_saturated_)
     {
-        // Saturated consensus maximization
-        double q = 0.9;
-        double L_trans = (1.0 / epsilon_t_) * q / (1.0 - q);
+        // // Saturated consensus maximization
+        // double q = 0.9;
+        // double L_trans = (1.0 / epsilon_t_) * q / (1.0 - q);
 
-        for (int i = 0; i <= max_id; i++)
-        {
-            if (match_count[i] == 0)
-                continue;
-            for (int j = 1; j <= match_count[i]; j++)
-            {
-                kernel_buffer(i, j - 1) = std::log(1.0 + L_trans * j / match_count[i]) -
-                                          std::log(1.0 + L_trans * (j - 1) / match_count[i]);
-            }
-        }
+        // for (int i = 0; i <= max_id; i++)
+        // {
+        //     if (match_count[i] == 0)
+        //         continue;
+        //     for (int j = 1; j <= match_count[i]; j++)
+        //     {
+        //         kernel_buffer(i, j - 1) = std::log(1.0 + L_trans * j / match_count[i]) -
+        //                                   std::log(1.0 + L_trans * (j - 1) / match_count[i]);
+        //     }
+        // }
+        kernel_buffer.col(0).setOnes();
     }
     else
     {

@@ -13,7 +13,7 @@ room_sizes =  [ 8,    6, 4;
     7,   7, 3;
     10.5, 5, 3.5;
     10.5, 6, 3.0];
-dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_names = ["S1","S2","S3","S4"];
 
 % set params
 branch_reso_t = 0.02; % terminate bnb when branch size <= branch_reso

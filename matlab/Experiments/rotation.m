@@ -9,7 +9,7 @@
 %%% License: MIT
 clear;
 clc
-dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_names = ["S1","S2","S3","S4"];
 
 % set general params
 branch_reso = pi/128;     % terminate bnb early when branch size < branch_reso
@@ -126,7 +126,6 @@ for scene_idx = 1:4
                 for i = 1:num_2D_lines
                     match_count(i) = sum(ids==i);
                 end
-                L = sum(log(match_count(match_count>0)));  % a sufficiently large number
                 kernel_buff_CM = ones(num_2D_lines,max(match_count));
                 kernel_buff_SCM_trunc = zeros(num_2D_lines,max(match_count));
                 kernel_buff_SCM_trunc(:,1)=1;

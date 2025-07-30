@@ -67,7 +67,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
 
     for (const auto &b : cur_bs)
     {
-      if (b.size() >= branch_resolution_)
+      if (b.size() + 1e-10>= branch_resolution_)
       {
         std::vector<RBranch> sub_branches = b.subDivide();
         sub_b.insert(sub_b.end(), sub_branches.begin(), sub_branches.end());
@@ -121,7 +121,6 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
     Eigen::AngleAxisd axis_angle(theta_best[i], u_best[i].normalized());
     R_opt[i] = axis_angle.toRotationMatrix().transpose();
   }
-
   return R_opt;
 }
 
@@ -1278,8 +1277,8 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
         continue;
       for (int j = 0; j < match_count[i]; j++)
       {
-        kernel_buffer(i, j) = std::log(1 + C * (j+1) / match_count[i]) -
-                              std::log(1 + C * j / match_count[i]);
+        kernel_buffer(i, j) = std::log(1.0 + C * (j+1) / match_count[i]) -
+                              std::log(1.0 + C * j / match_count[i]);
       }
     }
   }

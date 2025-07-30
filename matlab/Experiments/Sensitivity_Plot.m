@@ -1,5 +1,5 @@
 %%% Rotation Recall w.r.t parameter q (gt semantics)
-dataset_names = ["a1d9da703c","689fec23d7","c173f62b15","69e5939669"];
+dataset_names = ["S1","S2","S3","S4"];
 scene_name = ["S1 workstation","S2 office","S3 game bar","S4 art room"];
 for idx = 1:4
     dataset_name = dataset_names(idx);
