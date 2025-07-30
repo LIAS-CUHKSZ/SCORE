@@ -4,11 +4,8 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
-#include <queue>
 #include <future>
 #include <array>
-
-constexpr double PI = M_PI;
 
 // Solve for translation candidates using branch-and-bound
 std::vector<Eigen::Vector3d>

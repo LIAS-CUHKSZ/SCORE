@@ -1,130 +1,19 @@
 #include "RotFGO.h"
 #include "TransFGO.h"
+#include "helper.h"
 #include <chrono>
-#include <fstream>
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-
-// Utility function to read CSV files
-std::vector<std::vector<double>> readCSV(const std::string &filename)
-{
-  std::vector<std::vector<double>> data;
-  std::ifstream file(filename);
-  std::string line;
-
-  if (!file.is_open())
-  {
-    std::cerr << "Error: Could not open file " << filename << std::endl;
-    return data;
-  }
-
-  // Skip header line
-  std::getline(file, line);
-
-  while (std::getline(file, line))
-  {
-    std::vector<double> row;
-    std::stringstream ss(line);
-    std::string cell;
-
-    while (std::getline(ss, cell, ','))
-    {
-      try
-      {
-        row.push_back(std::stod(cell));
-      }
-      catch (const std::exception &e)
-      {
-        std::cerr << "Error parsing value: " << cell << std::endl;
-        row.push_back(0.0);
-      }
-    }
-    data.push_back(row);
-  }
-
-  file.close();
-  return data;
-}
-
-// Function to perform semantic matching (simplified version)
-void matchLines(const std::vector<std::vector<double>> &lines2D,
-                const std::vector<std::vector<double>> &lines3D,
-                std::vector<int> &ids, std::vector<Eigen::Vector3d> &n_2D,
-                std::vector<Eigen::Vector3d> &v_3D,
-                std::vector<Eigen::Vector3d> &endpoints_3D)
-{
-
-  // Clear output vectors
-  ids.clear();
-  n_2D.clear();
-  v_3D.clear();
-  endpoints_3D.clear();
-
-  // Count total matches first
-  int total_matches = 0;
-  for (size_t i = 0; i < lines2D.size(); i++)
-  {
-    double semantic_id_2d = lines2D[i][3]; // semantic_id column
-    for (size_t j = 0; j < lines3D.size(); j++)
-    {
-      double semantic_id_3d = lines3D[j][6]; // semantic_id column
-      if (std::abs(semantic_id_2d - semantic_id_3d) < 0.1)
-      {
-        total_matches++;
-      }
-    }
-  }
-
-  // Reserve space
-  ids.reserve(total_matches);
-  n_2D.reserve(total_matches);
-  v_3D.reserve(total_matches);
-  endpoints_3D.reserve(total_matches * 2);
-
-  // Perform matching
-  for (size_t i = 0; i < lines2D.size(); i++)
-  {
-    double semantic_id_2d = lines2D[i][3];
-    Eigen::Vector3d normal_2d(lines2D[i][0], lines2D[i][1], lines2D[i][2]);
-
-    for (size_t j = 0; j < lines3D.size(); j++)
-    {
-      double semantic_id_3d = lines3D[j][6];
-      if (std::abs(semantic_id_2d - semantic_id_3d) < 0.1)
-      {
-        // Add match
-        ids.push_back(i);
-        n_2D.push_back(normal_2d);
-
-        // Calculate 3D line direction vector
-        Eigen::Vector3d p1(lines3D[j][0], lines3D[j][1], lines3D[j][2]);
-        Eigen::Vector3d p2(lines3D[j][3], lines3D[j][4], lines3D[j][5]);
-        Eigen::Vector3d direction = p2 - p1;
-        direction.normalize();
-        v_3D.push_back(direction);
-
-        // Add endpoints
-        endpoints_3D.push_back(p1);
-        endpoints_3D.push_back(p2);
-      }
-    }
-  }
-
-  std::cout << "Found " << total_matches << " line associations" << std::endl;
-}
 
 int main()
 {
 
-  std::string data_folder = "D:\\Desktop\\SCORE\\matlab\\test_demo\\";
+  std::string data_folder = "/home/leoj/Github_Repos/SCORE/matlab/test_demo/";
 
   std::cout << "Reading CSV files..." << std::endl;
-  auto intrinsic_data = readCSV(data_folder + "camera_intrinsic.csv");
-  auto gt_pose_data = readCSV(data_folder + "gt_pose.csv");
-  auto lines2D_data = readCSV(data_folder + "2Dlines.csv");
-  auto lines3D_data = readCSV(data_folder + "3Dlines.csv");
+  auto intrinsic_data = helper::readCSV(data_folder + "camera_intrinsic.csv");
+  auto gt_pose_data = helper::readCSV(data_folder + "gt_pose.csv");
+  auto lines2D_data = helper::readCSV(data_folder + "2Dlines.csv");
+  auto lines3D_data = helper::readCSV(data_folder + "3Dlines.csv");
 
   if (intrinsic_data.empty() || gt_pose_data.empty() || lines2D_data.empty() ||
       lines3D_data.empty())
@@ -173,7 +62,7 @@ int main()
   std::vector<int> ids;
   std::vector<Eigen::Vector3d> n_2D, v_3D, endpoints_3D;
   std::cout << "Performing semantic matching..." << std::endl;
-  matchLines(processed_lines2D, lines3D_data, ids, n_2D, v_3D, endpoints_3D);
+  helper::matchLines(processed_lines2D, lines3D_data, ids, n_2D, v_3D, endpoints_3D);
 
   if (ids.empty())
   {
@@ -181,10 +70,10 @@ int main()
     return -1;
   }
 
-  double prox_thres_r = 1.0 * M_PI / 180.0;
   double branch_reso_r =
       M_PI / 256.0;                    // terminate bnb when branch size < resolution
   double sample_reso_r = M_PI / 256.0; // resolution for interval analysis
+  double prox_thres_r = branch_reso_r;
   double epsilon_r = 0.015;
 
   // Translation parameters
@@ -234,7 +123,7 @@ int main()
       continue;
     }
 
-    Eigen::Matrix3d R_opt = R_candidates[0].transpose();
+    Eigen::Matrix3d R_opt = R_candidates[0];
     Eigen::Matrix3d R_error = R_opt * R_gt.transpose();
     double trace_R = R_error.trace();
     double angle_error =

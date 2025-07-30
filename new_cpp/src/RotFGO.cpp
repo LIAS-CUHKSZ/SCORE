@@ -18,17 +18,17 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
               const std::vector<RBranch> &initial_branches)
 {
   // Step 1: Create kernel buffer
-  auto t_kernel_start = std::chrono::high_resolution_clock::now();
+  // auto t_kernel_start = std::chrono::high_resolution_clock::now();
   Eigen::MatrixXd kernel_buffer = createKernelBuffer(ids);
-  auto t_kernel_end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double, std::milli> kernel_duration = t_kernel_end - t_kernel_start;
-  std::cout << "[BENCH] Kernel buffer creation: " << kernel_duration.count() << " ms" << std::endl;
+  // auto t_kernel_end = std::chrono::high_resolution_clock::now();
+  // std::chrono::duration<double, std::milli> kernel_duration = t_kernel_end - t_kernel_start;
+  // std::cout << "[BENCH] Kernel buffer creation: " << kernel_duration.count() << " ms" << std::endl;
 
   // Step 2: Pre-compute line pair data
   LinePairData line_pair_data = dataProcess(vector_n, vector_v);
 
   // Step 3: Initialize branch-and-bound process
-  BranchQueue q;
+  BranchQueue bq;
 
   double best_lb = -1.0;
   std::vector<Eigen::Vector3d> u_best;
@@ -40,25 +40,25 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   {
     auto theta_candidates = calcBounds(line_pair_data, branch, ids, kernel_buffer);
     updateBestSolution(branch, theta_candidates, best_lb, u_best, theta_best);
-    q.push(branch);
+    bq.push(branch);
   }
 
   // Step 5: Main branch-and-bound loop
-  bool stop = false;
-  while (!q.empty())
+  while (!bq.empty())
   {
     // Get up to 2 branches from the queue for parallel processing
     std::vector<RBranch> cur_bs;
 
     // Pop first branch
-    cur_bs.emplace_back(std::move(const_cast<RBranch &>(q.top())));
-    q.pop();
+    cur_bs.emplace_back(std::move(const_cast<RBranch &>(bq.top())));
+    bq.pop();
 
     // Pop second branch if available and if first branch is large enough
-    if (!q.empty() && cur_bs[0].size() >= branch_resolution_)
+    // In order to process at most 8 branches asynchronously and speed up
+    if (!bq.empty() && cur_bs[0].size() + 1e-10>= branch_resolution_)
     {
-      cur_bs.emplace_back(std::move(const_cast<RBranch &>(q.top())));
-      q.pop();
+      cur_bs.emplace_back(std::move(const_cast<RBranch &>(bq.top())));
+      bq.pop();
     }
 
     // Process all branches and their sub-branches asynchronously
@@ -93,31 +93,24 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
       updateBestSolution(sub_b[i], theta_candidates, best_lb,
                          u_best, theta_best);
 
-      if (sub_b[i].upper_bound > best_lb)
-      {
-        q.push(sub_b[i]);
-      }
-      else if (sub_b[i].upper_bound < best_lb + 1e-10 &&
-               sub_b[i].lower_bound == best_lb)
-      {
-        stop = true;
-        break;
-      }
-      else
+      //stop further splitting if U/L bounds meet, and current cube attains the best lower bound.
+      if (sub_b[i].lower_bound+1e-10 > best_lb && sub_b[i].upper_bound < best_lb + 1e-10) 
+      // numerically more stable than sub_b[i].lower_bound == best_lb && sub_b[i].upper_bound == best_lb
       {
         continue;
       }
-
-      pruneBranchQueue(q, best_lb);
-
+      // continue splitting if the current cube has potential to improve best_lb
+      if (sub_b[i].upper_bound - 1e-10 > best_lb)
+      {
+        bq.push(sub_b[i]);
+      }
       // std::cout << "iter: " << iter
       //           << ", upper: " << sub_b[i].upper_bound
       //           << ", lower: " << sub_b[i].lower_bound
       //           << ", best : " << best_lb << std::endl;
     }
-
-    if (stop || iter >= 2500)
-      break;
+    pruneBranchQueue(bq, best_lb);
+    iter = iter + 1;
   }
 
   // Step 6: Generate rotation matrices
@@ -126,7 +119,7 @@ RotFGO::solve(const std::vector<Eigen::Vector3d> &vector_n,
   for (size_t i = 0; i < res_sz; i++)
   {
     Eigen::AngleAxisd axis_angle(theta_best[i], u_best[i].normalized());
-    R_opt[i] = axis_angle.toRotationMatrix();
+    R_opt[i] = axis_angle.toRotationMatrix().transpose();
   }
 
   return R_opt;
@@ -1262,6 +1255,8 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
   int max_id = *std::max_element(ids.begin(), ids.end());
   int num_2d_lines = max_id + 1;
   std::vector<int> match_count(num_2d_lines, 0);
+
+  // count the number of total associations for each 2D line
   for (size_t id : ids)
     match_count[id]++;
 
@@ -1274,25 +1269,17 @@ Eigen::MatrixXd RotFGO::createKernelBuffer(const std::vector<int> &ids)
   }
   else
   {
-    // Saturated consensus maximization with entropy
-    double L = 0.0;
-    for (int count : match_count)
-    {
-      if (count > 0)
-      {
-        L += std::log(count);
-      }
-    }
+    // Saturated consensus maximization based on likelihood with hyperparameter q
+    double C = this->q_value_ / (1 - this->q_value_) * 1 / this->epsilon_r_;
 
     for (int i = 0; i < num_2d_lines; i++)
     {
       if (match_count[i] == 0)
         continue;
-
-      kernel_buffer(i, 0) = 1.0 - std::log(match_count[i]) / L;
-      for (int j = 1; j < match_count[i]; j++)
+      for (int j = 0; j < match_count[i]; j++)
       {
-        kernel_buffer(i, j) = (std::log(j + 1) - std::log(j)) / L;
+        kernel_buffer(i, j) = std::log(1 + C * (j+1) / match_count[i]) -
+                              std::log(1 + C * j / match_count[i]);
       }
     }
   }

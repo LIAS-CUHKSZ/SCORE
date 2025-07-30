@@ -15,8 +15,12 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
 endif()
 
+# include directories
+include_directories(
+    include
+)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-add_executable(test_rotfgo test.cpp RotFGO.cpp TransFGO.cpp)
+add_executable(test_rotfgo src/test.cpp src/RotFGO.cpp src/TransFGO.cpp src/helper.cpp)
 target_link_libraries(test_rotfgo Eigen3::Eigen)
 
 

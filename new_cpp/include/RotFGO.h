@@ -7,6 +7,7 @@
 #include <vector>
 #include <queue>
 
+// store data for a pair of associated 2D/3D lines
 struct LinePairData
 {
   std::vector<Eigen::Vector3d> vector_n;
@@ -30,6 +31,8 @@ struct LinePairData
   int size;
 };
 
+// Comparator for priority queue
+// store data for a branch during rotation BnB
 struct RBranch
 {
   double alpha_min, phi_min, alpha_max, phi_max;
@@ -87,16 +90,16 @@ public:
   // configuration structure for RotFGO parameters
   struct RotFGOConfig
   {
-    double branch_resolution;
-    double epsilon_r;
-    double sample_resolution;
-    double prox_threshold;
-    bool use_saturated;
-
+    double branch_resolution;  // stop splitting a branch when its size is less than this
+    double epsilon_r;          // error tolerance
+    double sample_resolution;  // control granuity of interval analysis
+    double prox_threshold;     // cluster similar stabbers
+    bool use_saturated;        // 0: Consensus Maximization, 1: Saturated Consensus Maximization
+    double q_value;            // q value for saturation function
     RotFGOConfig(double branch_res, double eps, double sample_res,
-                 double prox_thresh, bool saturated = true)
+                 double prox_thresh, bool saturated = true, double q = 0.0)
         : branch_resolution(branch_res), epsilon_r(eps), sample_resolution(sample_res),
-          prox_threshold(prox_thresh), use_saturated(saturated) {}
+          prox_threshold(prox_thresh), use_saturated(saturated), q_value(q) {}
   };
 
   // struct SolverStats
@@ -115,18 +118,19 @@ public:
   //   }
   // };
 
-  RotFGO(const RotFGOConfig &config)
+RotFGO(const RotFGOConfig &config)
       : branch_resolution_(config.branch_resolution), epsilon_r_(config.epsilon_r),
         sample_resolution_(config.sample_resolution), prox_threshold_(config.prox_threshold),
-        use_saturated_(config.use_saturated) {}
+        use_saturated_(config.use_saturated), q_value_(config.q_value) {}
 
   // Legacy constructor for backward compatibility
   RotFGO(double branch_resolution, double epsilon_r,
-         double sample_resolution, double prox_threshold, bool use_saturated = true)
+         double sample_resolution, double prox_threshold, 
+         bool use_saturated = true, double q = 0.99)
       : branch_resolution_(branch_resolution), epsilon_r_(epsilon_r),
         sample_resolution_(sample_resolution), prox_threshold_(prox_threshold),
-        use_saturated_(use_saturated) {}
-
+        use_saturated_(use_saturated), q_value_(q) {}
+  
   ~RotFGO() {}
 
   std::vector<Eigen::Matrix3d>
@@ -179,6 +183,7 @@ private:
   double sample_resolution_;
   double prox_threshold_;
   bool use_saturated_;
+  double q_value_;
 };
 
 #endif // ROTFGO_H
