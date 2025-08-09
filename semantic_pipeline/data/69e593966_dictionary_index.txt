@@ -1,0 +1,25 @@
+1 wall
+2 floor
+3 ceiling
+5 chair
+6 table
+10 ceiling lamp
+11 power socket
+13 shelf
+14 board
+18 light switch
+19 intercom
+22 window
+24 box
+25 roller blinds
+26 bucket
+27 container
+33 mat
+41 whiteboard
+42 poster
+43 banner
+44 emergency light
+45 heater
+48 windowsill
+49 cabinet
+51 door

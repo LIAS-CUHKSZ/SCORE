@@ -1,0 +1,30 @@
+pc
+window
+door
+monitor
+wall
+cabinet
+chair
+box
+ceiling
+door frame
+desk
+keyboard
+whiteboard
+bin
+table
+coffee maker
+water filter
+laptop
+brief
+window frame
+curtain
+heater
+window sill
+object
+phone
+decoration
+power socket
+light switch
+floor
+calendar

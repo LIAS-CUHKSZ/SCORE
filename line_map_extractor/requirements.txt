@@ -1,0 +1,10 @@
+joblib
+setuptools
+tqdm
+numpy
+open3d
+opencv-python
+scikit-image
+scipy
+matplotlib
+git+https://github.com/iago-suarez/ELSED.git

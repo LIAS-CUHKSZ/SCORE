@@ -1,0 +1,25 @@
+wall
+floor
+ceiling
+chair
+table
+ceiling lamp
+power socket
+shelf
+board
+light switch
+intercom
+window
+box
+roller blinds
+bucket
+container
+mat
+whiteboard
+poster
+banner
+emergency light
+heater
+windowsill
+cabinet
+door

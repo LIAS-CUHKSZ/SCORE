@@ -1,0 +1,50 @@
+##########adopted semantic labels##########
+1,pc
+2,window
+3,door
+4,monitor
+5,wall
+6,cabinet
+7,chair
+8,box
+10,ceiling
+13,keyboard
+15,whiteboard
+16,bin
+18,table
+19,coffee maker
+21,water filter
+24,laptop
+26,brief
+30,curtain
+31,heater
+33,window sill
+37,phone
+43,power socket
+44,light switch
+45,floor
+46,calendar
+
+##########deleted semantic labels##########
+9,office chair
+11,door frame
+12,desk
+14,speaker
+17,ball
+20,cup
+22,backpack
+23,towel
+25,book
+27,jacket
+28,window frame
+29,bag
+32,plant
+34,object
+35,headset
+36,mouse
+38,post-it
+39,paper note
+40,REMOVE
+41,decoration
+42,split
+47,plant pot

@@ -1,0 +1,33 @@
+floor
+wall
+cabinet
+door
+bench
+chair
+sofa
+table
+whiteboard
+poster
+exhaust fan
+calendar
+heater
+frame
+ladder
+projector screen
+coat rack
+structure
+shelf
+crate
+box
+computer tower
+monitor
+bar counter
+stool
+trash can
+socket
+pedestal fan
+ceiling
+speaker
+projector
+ceiling light
+sofa chair

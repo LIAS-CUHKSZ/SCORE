@@ -1,0 +1,55 @@
+##########adopted semantic labels##########
+1,floor
+2,wall
+3,cabinet
+4,door
+5,bench
+6,chair
+8,sofa
+9,table
+11,whiteboard
+13,poster
+14,exhaust fan
+15,calendar
+17,socket box
+18,frame
+19,ladder
+20,projector screen
+21,coat rack
+23,structure
+24,shelf
+25,crate
+27,box
+29,computer tower
+30,monitor
+35,trash can
+39,socket
+41,pedestal fan
+45,ceiling
+46,speaker
+47,projector
+49,ceiling light
+
+##########deleted semantic labels##########
+7,christmas tree
+10,doorframe
+12,paper
+16,heater
+22,object
+26,ball
+28,tool box
+31,wine bottle
+32,bar counter
+33,stool
+34,cone
+36,fire extinguisher
+37,cables
+38,light switch
+40,table football
+42,pillow
+43,long pillow
+44,bowl
+48,bottle
+50,ceiling lamp
+51,mat
+52,sofa chair

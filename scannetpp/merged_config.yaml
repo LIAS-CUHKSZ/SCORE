@@ -1,0 +1,80 @@
+###################### common properties ######################
+# scene ids to be processed
+scene_ids: ["a1d9da703c"]          # a1d9da703c, 689fec23d7,c173f62b15, 69e5939669
+filter_scenes: ["a1d9da703c"]   
+exclude_scenes: []
+# image type - iphone or dslr
+image_type: iphone
+# input folders 
+data_root: /data2/scannetppv2/data
+visiblity_cache_dir: /data2/scannetppv2/raster_visiblity_iphone
+# output folders
+rasterout_dir: /data2/scannetppv2/raster_iphone
+semantic_save_dir_root: /data2/scannetppv2/
+semanticout_dir: semantic_2D_iphone
+###################### render.yml ######################
+# Set True to render depth for iphone frames
+render_iphone: True
+# Set True to render depth for dslr frames
+render_dslr: False
+
+# The near and far planes for the depth camera during rendering in meters.
+near: 0.05
+far: 20.0
+
+# Output directory for the rendered depth images. If not given, the output will be saved to data folder in data_root
+# output_dir: /data1/home/lucky/ELSED/dataset
+
+###################### prepare_iphone_data.yml ######################
+# extract RGB frames
+extract_rgb: true
+# extract anonymization masks
+extract_masks: true
+# extract depth frames
+extract_depth: true
+###################### rasterize.yml ######################
+# 
+no_log: true
+# subsample images 
+subsample_factor: 1
+# downsample images and rasterize
+image_downsample_factor: null
+
+limit_images: None
+
+wandb_group: null
+wandb_notes: null
+
+batch_size: 4
+limit_batches: null
+skip_existing: true
+
+###################### semantics_2d.yml ######################
+undistort_dslr: false
+create_visiblity_cache_only: false
+############### hyperparams #################
+# use topk views with visiblity of object vertices
+visibility_topk: 3
+# min size of the bbox of an object (each side must be greater than this in pixels)
+bbox_min_side_pix: 50
+# atleast this fraction of the object's vertices should be visible in the image
+# set to 0 to ignore threshold
+obj_visible_thresh: 0.1
+# object should cover atleast this fraction of the image's pixels
+# set to 0 to ignore threshold
+obj_pixel_thresh: 0.00
+# object should be within this distance from the camera (meters) (set large number to include all objects)
+obj_dist_thresh: 999
+# expand the bbox by this fraction in each direction
+bbox_expand_factor: 0.1
+############### dbg #################
+dbg:
+  # viz obj ids in 2d for each image
+  viz_obj_ids: true
+  obj_ids: true
+
+###################### best view ######################
+best_view_cache_dir: /data2/scannetppv2/best_view_cache_iphone
+coverage_threshold: 0.99
+split_ratio: 0.9
+num_neighbors: 8

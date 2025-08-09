@@ -1,0 +1,14 @@
+We merge ambiguous words for output of semantic segmentation, as defined under sceneid_pred/remapping.txt
+
+- a1d9da703c:
+10 'file cabinet' merged to 14 'table'
+
+- 689fec23d7:
+6 'cabinet' merged to 18 'table'
+
+- c173f62b15:
+20 'projector screen' merged to 11 'whiteboard'
+29 'computer tower'   merged to 3  'cabinet'
+
+- 69e5939669:
+4 'stool' merged to 6 'table'

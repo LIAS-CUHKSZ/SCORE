@@ -1,0 +1,54 @@
+##########adopted semantic labels##########
+1,wall
+2,floor
+3,ceiling
+4,stool
+5,chair
+6,table
+10,ceiling lamp
+11,power socket
+13,shelf
+14,board
+18,light switch
+19,intercom
+22,window
+24,box
+25,roller blinds
+26,bucket
+33,mat
+41,whiteboard
+42,poster
+43,banner
+44,emergency light
+45,heater
+48,windowsill
+49,cabinet
+51,door
+
+##########deleted semantic labels##########
+7,bookshelf
+8,curtain
+9,smoke detector
+12,object
+15,SPLIT
+16,pen holder
+17,paper
+20,doorframe
+21,REMOVE
+23,tube
+27,container
+28,brushes
+29,tools
+30,book
+31,cardboard
+32,rolled paper
+34,tablecloth
+35,jug
+36,eggs
+37,fruits
+38,plate
+39,food
+40,jar
+46,fire extinguisher
+47,window frame
+50,books

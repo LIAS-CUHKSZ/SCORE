@@ -1,0 +1,39 @@
+############### input data #################
+# release data downloaded to disk
+data_root: /data1/home/lucky/ELSED/dataset
+
+scene_list: [55b2bf8036]
+filter_scenes: [55b2bf8036]
+
+rasterout_dir: /data1/home/lucky/ELSED/dataset/raster_iphone
+visiblity_cache_dir: /data1/home/lucky/ELSED/dataset/raster_visiblity_iphone
+exclude_scenes: []
+# image type - iphone or dslr
+image_type: iphone
+undistort_dslr: false
+create_visiblity_cache_only: false
+############### hyperparams #################
+# use topk views with visiblity of object vertices
+visibility_topk: 3
+# min size of the bbox of an object (each side must be greater than this in pixels)
+bbox_min_side_pix: 50
+# subsample images 
+subsample_factor: 1
+# atleast this fraction of the object's vertices should be visible in the image
+# set to 0 to ignore threshold
+obj_visible_thresh: 0.1
+# object should cover atleast this fraction of the image's pixels
+# set to 0 to ignore threshold
+obj_pixel_thresh: 0.00
+# object should be within this distance from the camera (meters) (set large number to include all objects)
+obj_dist_thresh: 999
+# expand the bbox by this fraction in each direction
+bbox_expand_factor: 0.1
+############### output #################
+save_dir_root: /data1/home/lucky/ELSED/dataset/
+save_dir: semantic_2d_iphone
+############### dbg #################
+dbg:
+  # viz obj ids in 2d for each image
+  viz_obj_ids: true
+  obj_ids: true
