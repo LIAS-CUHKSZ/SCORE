@@ -10,13 +10,11 @@ https://arxiv.org/pdf/2503.03254
 cd CPP && mkdir build && cd build && cmake .. && make
 ```
 
-## 2. Download full datasets
+## 2. Download our datasets
+including
+- preprocessed csv datasets (CSV_dataset.tar.gz)
+- semantic segmentation masks (*_segmentation_mask.tar.gz).
 Google drive link: https://drive.google.com/drive/folders/141lQdHufOMp3ovRSQsV_06HDgxwhTKuF?usp=sharing
-Our datasets include:
-- full csv datasets (CSV_dataset.tar.gz),
-- outputs from line map extraction code (line_map_extractor_outputs.tar.gz), 
-- semantic segmentation results (semantic_prediction_*.tar.gz).
-
 
 
 ## 3. Replicate experiment results presented in our paper:
@@ -30,7 +28,7 @@ Our datasets include:
 Since the publication of the paper, we have been continuously improving the codebase. As a consequence, the results might
 slightly deviate from (usually improve over) the original numbers found in our IROS2025 paper.
 
-## 4. Go through line map construction pipeline on ScanNet++ Dataset (Optional)
+## 4. Go through line map construction pipeline on ScanNet++ Dataset
 ### Download ScanNet++ Dataset
 We revised the pre-processing code for ScanNet++. Follow README.md under folder scannetpp.
 
