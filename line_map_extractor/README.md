@@ -1,7 +1,12 @@
+<p align="center">
+    <img src="../images/scenes.jpg" alt="scenes" width="666">
+</p>
+
 ### Notice: 
 - In the paper we use S1-S4 to denote scenes, under this folder we use scene ids given by ScanNet++:
 
     **a1d9da703c**: S1 work station, **689fec23d7**: S2 office, **c173f62b15**: S3 game bar, **69e5939669**: S4 art room
+
 - The hyper-parameters with default values are in helper.py.
 - The retriveal results using NetVLAD are under folder line_map_extractor/NetVLAD20/*. 
   - In experiment, we choose the first 12 retrived images. You can tune this number in prepare_query_data.py.

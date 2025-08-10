@@ -24,7 +24,10 @@
 ## Experiments/* contains all the experiment code
 1. run test.m 
    - The used csv files are available under csv_dataset/test_data.
-
+   - output under default parameters:
+<p align="center">
+    <img src="../images/matlab_test_output.png" alt="matlab test code" width="666">
+</p>
 2. run Experiments/rotation.m 
    - The used csv files need to be downloaded from Google drive and put under csv_dataset/.
    - Configure experiments by setting the following variables:

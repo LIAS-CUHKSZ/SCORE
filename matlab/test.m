@@ -49,7 +49,7 @@ lines3D = readmatrix(data_folder+"/3Dlines.csv");
 %---- 3. complete pipeline starts here -----
 outlier_ratio = 1-nnz(lines2D(:,9)>0)/size(n_2D,1);
 num_2D_lines = size(lines2D,1);
-fprintf("%d 2D lines with %d associations at a outlier ratio of %f\n",num_2D_lines,length(ids),outlier_ratio)
+fprintf("%d 2D lines with %d associations at outlier ratio %f\n",num_2D_lines,length(ids),outlier_ratio)
 % o=1: consensus maximization
 % o=2: saturated consensus maximization
 for o = 1:2

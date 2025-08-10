@@ -1,6 +1,5 @@
 We provide the code `semantic_pipeline/` to get the semantic segmentation results using the RAM++ and Grounded-SAM. 
-You can also directly use prediction results provided in dataset:
-Google drive link: https://drive.google.com/drive/folders/141lQdHufOMp3ovRSQsV_06HDgxwhTKuF?usp=sharing
+You can also directly use segmentation masks provided in Google drive link: https://drive.google.com/drive/folders/141lQdHufOMp3ovRSQsV_06HDgxwhTKuF?usp=sharing
 
 ### 0. Install the dependencies
 ```bash

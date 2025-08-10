@@ -60,7 +60,8 @@ Record_SCM_trunc   =table('Size', [num_images, length(column_names)],'VariableTy
 % go through each query image
 temp_buffer = cell(num_images,num_q);  % store results for likelihood-based saturation function in a temp buffer
 lines3D=readmatrix(data_folder+"/3Dlines.csv");
-parfor num = 1:num_images
+for num = 1:num_images
+% parfor num = 1:num_images % use parfor to run in parallel
     % ---------------------------------------------------------------------
     % --- 1. load data ---
     img_name = query_list(num);

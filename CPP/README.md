@@ -30,11 +30,16 @@ mkdir build && cd build && cmake .. && make
 ```
 
 ### 2. run test.cpp which uses data under csv_dataset/test_data
-- The program should output same results as matlab test code matlab/test.m
+- The program should output similar results as matlab test code matlab/test.m:
+<p align="center">
+    <img src="../images/cpp_test_output1.png" alt="cpp test 1" width="333">
+    <img src="../images/cpp_test_output2.png" alt="cpp test 2" width="333">
+</p>
 
 ### 3. Download csv datasets and run reloc_one.cpp to relocalize a chosen query image
-- Usage: build/reloc_one 1 y 2 4, which means 
-   - (1/2/3/4):    choose scene S1/S2/S3/S4, (y/n):use ground truth labels or predicted lables, 
+- Usage example: build/reloc_one 1 y 2 4, which means 
+   - (1/2/3/4):    choose scene S1/S2/S3/S4
+   - (y/n):use ground truth labels or predicted lables, 
    - (0/1/2/3...): 0 for search rotation axis on the whole sphere, n>=1 for search on a subcube with side length pi/n
    - (1/2/3/4...): image idx in query image lists. 
 

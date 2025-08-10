@@ -67,7 +67,9 @@ Record_SCM_trunc = table('Size', [valid_num, length(column_names)],'VariableType
 temp_buffer = cell(valid_num,num_q);
 img_names = record_rot_SCM_ML.("Image Name");
 lines3D=readmatrix(data_folder+"/3Dlines.csv");
-parfor num =1:valid_num
+
+% parfor num =1:valid_num % use parfor to run in parallel
+for num =1:valid_num
     % ---------------------------------------------------------------------
     % --- 1. load data ---
     img_name = img_names(num);
