@@ -1,6 +1,8 @@
 ## SCORE: Saturated Consensus Relocalization in Semantic Line Maps
 Our paper has been accepted by IROS 2025, and a longer version can be found on arxiv: 
 https://arxiv.org/pdf/2503.03254
+2 hour video in Chinese: 
+https://www.bilibili.com/video/BV1GPnhzCE5N/?spm_id_from=333.337.search-card.all.click
 <p align="center">
     <img src="images/teaser.png" alt="teaser" width="666">
 </p>
